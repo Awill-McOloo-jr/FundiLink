@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import {
   COUNTIES,
@@ -46,6 +46,7 @@ interface JobsPageProps {
   setFilterQuery: (v: string) => void;
   selectedJobId: string;
   setSelectedJobId: (id: string) => void;
+  isDetailPage: boolean;
   onNavigate: (page: string) => void;
   showToast: (msg: string) => void;
 }
@@ -79,14 +80,19 @@ export default function JobsPage({
   setFilterQuery,
   selectedJobId,
   setSelectedJobId,
+  isDetailPage,
   onNavigate,
   showToast,
 }: JobsPageProps) {
   const { currentUser, isAuthenticated, profiles } = useAuth();
-  const [view, setView] = useState<View>('list');
+  const [view, setView] = useState<View>(() => isDetailPage ? 'detail' : 'list');
   const [maxBudget, setMaxBudget] = useState(100000);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All Categories');
   const [coverLetter, setCoverLetter] = useState('');
+
+  useEffect(() => {
+    setView(isDetailPage ? 'detail' : 'list');
+  }, [isDetailPage]);
 
   const activeJobs = useMemo(
     () => jobs.filter(job => job.status === 'active'),
@@ -177,7 +183,10 @@ export default function JobsPage({
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <button
-          onClick={() => setView('list')}
+          onClick={() => {
+            setView('list');
+            onNavigate('jobs');
+          }}
           className="mb-4 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-[#005fec] transition hover:-translate-x-0.5 hover:bg-slate-50"
         >
           Back to jobs
@@ -474,6 +483,7 @@ export default function JobsPage({
                   onClick={() => {
                     setSelectedJobId(job._id);
                     setView('detail');
+                    onNavigate('job-detail');
                     setCoverLetter('');
                   }}
                   className="group block w-full cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl active:scale-[0.99] sm:p-6"

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import {
   SEED_JOBS, SEED_APPLICATIONS, SEED_MESSAGES, SEED_REVIEWS, SEED_PAYMENTS,
-  type Job, type Application, type Message, type Review, type Payment
+  type Job, type Application, type Message, type Review, type Payment, type ProfileViewEvent
 } from './db/schema';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -25,6 +25,7 @@ type StoredAppState = {
   messages?: Message[];
   reviews?: Review[];
   profileViews?: Record<string, number>;
+  profileViewEvents?: ProfileViewEvent[];
   currentPage?: Page;
   selectedJobId?: string;
   selectedFundiId?: string;
@@ -70,7 +71,7 @@ function pageFromPath(pathname: string): Page | null {
 }
 
 function AppContent() {
-  const { currentUser, updateProfile, suspendUser } = useAuth();
+  const { currentUser, updateProfile, suspendUser, profiles } = useAuth();
   const storedAppState = typeof window !== 'undefined' ? readStoredAppState() : {};
 
   // Database state (simulating Convex reactive tables)
@@ -80,6 +81,7 @@ function AppContent() {
   const [reviews, setReviews] = useState<Review[]>(storedAppState.reviews || SEED_REVIEWS);
   const [payments] = useState<Payment[]>(SEED_PAYMENTS);
   const [profileViews, setProfileViews] = useState<Record<string, number>>(storedAppState.profileViews || {});
+  const [profileViewEvents, setProfileViewEvents] = useState<ProfileViewEvent[]>(storedAppState.profileViewEvents || []);
   const recordedProfileViews = useRef(new Set<string>());
   const [serverLoaded, setServerLoaded] = useState(false);
 
@@ -123,15 +125,35 @@ function AppContent() {
     navigate(page);
   }, [currentUser, navigate]);
 
+  const openJobDetail = useCallback((jobId: string) => {
+    setSelectedJobId(jobId);
+    navigate('job-detail');
+  }, [navigate]);
+
   const recordProfileView = useCallback((fundiId: string) => {
     const viewKey = `${currentUser?._id || 'guest'}:${fundiId}`;
     if (recordedProfileViews.current.has(viewKey)) return;
     recordedProfileViews.current.add(viewKey);
+    const viewerProfile = currentUser ? profiles.find(profile => profile.userId === currentUser._id) : undefined;
+    const viewedAt = Date.now();
+    const viewerRole: ProfileViewEvent['viewerRole'] = currentUser?.role || 'guest';
     setProfileViews(prev => ({
       ...prev,
       [fundiId]: (prev[fundiId] || 0) + 1,
     }));
-  }, [currentUser?._id]);
+    setProfileViewEvents(prev => [
+      {
+        _id: `view_${viewedAt}_${Math.random().toString(36).slice(2, 8)}`,
+        fundiId,
+        viewerId: currentUser?._id,
+        viewerName: currentUser?.name || 'Guest visitor',
+        viewerRole,
+        viewerAvatarUrl: viewerProfile?.avatarUrl || currentUser?.avatarUrl,
+        viewedAt,
+      },
+      ...prev,
+    ].slice(0, 250));
+  }, [currentUser, profiles]);
 
   useEffect(() => {
     let alive = true;
@@ -143,6 +165,7 @@ function AppContent() {
         messages: Message[];
         reviews: Review[];
         profileViews: Record<string, number>;
+        profileViewEvents: ProfileViewEvent[];
       }) => {
         if (!alive) return;
         setJobs(state.jobs);
@@ -150,6 +173,7 @@ function AppContent() {
         setMessages(state.messages);
         setReviews(state.reviews);
         setProfileViews(state.profileViews || {});
+        setProfileViewEvents(state.profileViewEvents || []);
         setServerLoaded(true);
       })
       .catch(() => setServerLoaded(true));
@@ -165,6 +189,7 @@ function AppContent() {
       messages,
       reviews,
       profileViews,
+      profileViewEvents,
       currentPage,
       selectedJobId,
       selectedFundiId,
@@ -181,6 +206,7 @@ function AppContent() {
         messages,
         reviews,
         profileViews,
+        profileViewEvents,
       }),
     }).catch(() => undefined);
   }, [
@@ -192,6 +218,7 @@ function AppContent() {
     jobs,
     messages,
     profileViews,
+    profileViewEvents,
     reviews,
     selectedFundiId,
     selectedJobId,
@@ -224,9 +251,10 @@ function AppContent() {
               jobs={jobs}
               applications={applications}
               onNavigate={navigateFromFundiDashboard}
+              onOpenJob={openJobDetail}
               showToast={showToast}
-              updateProfile={updateProfile}
               profileViews={profileViews[currentUser._id] || 0}
+              profileViewEvents={profileViewEvents.filter(event => event.fundiId === currentUser._id)}
             />
           );
         }
@@ -279,6 +307,7 @@ function AppContent() {
             setFilterQuery={setFilterQuery}
             selectedJobId={selectedJobId}
             setSelectedJobId={setSelectedJobId}
+            isDetailPage={currentPage === 'job-detail'}
             onNavigate={navigate}
             showToast={showToast}
           />
@@ -315,9 +344,10 @@ function AppContent() {
             jobs={jobs}
             applications={applications}
             onNavigate={navigateFromFundiDashboard}
+            onOpenJob={openJobDetail}
             showToast={showToast}
-            updateProfile={updateProfile}
             profileViews={currentUser ? profileViews[currentUser._id] || 0 : 0}
+            profileViewEvents={currentUser ? profileViewEvents.filter(event => event.fundiId === currentUser._id) : []}
           />
         );
       case 'dashboard-employer':

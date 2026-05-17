@@ -37,6 +37,7 @@ export interface User {
   role: UserRole;          // indexed
   name: string;
   phone: string;           // +254 prefixed
+  avatarUrl?: string;
   passwordHash: string;    // bcrypt hash (simulated)
   otpCode?: string;        // 6-digit OTP (simulated)
   otpExpiry?: number;      // Unix timestamp
@@ -72,6 +73,16 @@ export interface Profile {
 // ── TABLE: jobs ─────────────────────────────────────────────────────────────
 // Relationship: employerId → users._id
 // Indexes: byEmployer, byCounty, bySkill, byStatus, byBudget, byDeadline
+export interface ProfileViewEvent {
+  _id: string;
+  fundiId: string;
+  viewerId?: string;
+  viewerName: string;
+  viewerRole: UserRole | 'guest';
+  viewerAvatarUrl?: string;
+  viewedAt: number;
+}
+
 export interface Job {
   _id: string;
   employerId: string;      // FK → users._id
@@ -157,24 +168,39 @@ export interface Payment {
 const now = Date.now();
 const day = 86400000;
 
+export const USER_AVATAR_POOL = [
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80',
+  'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=160&fit=crop&crop=face&q=80',
+  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=160&h=160&fit=crop&crop=face&q=80',
+  'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80',
+];
+
+export function defaultAvatarForUser(role: UserRole, name = '') {
+  const offset = role === 'fundi' ? 0 : role === 'employer' ? 2 : 5;
+  const nameScore = name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return USER_AVATAR_POOL[(nameScore + offset) % USER_AVATAR_POOL.length];
+}
+
 export const SEED_USERS: User[] = [
-  { _id: 'u_fundi_1', email: 'kamau.mason@gmail.com', role: 'fundi', name: 'John Kamau', phone: '+254712345678', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 90*day, updatedAt: now - 2*day },
-  { _id: 'u_fundi_2', email: 'mwangi.plumber@yahoo.com', role: 'fundi', name: 'Peter Mwangi', phone: '+254722111222', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 60*day, updatedAt: now - 5*day },
-  { _id: 'u_fundi_3', email: 'amina.electric@gmail.com', role: 'fundi', name: 'Amina Onyango', phone: '+254733444555', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 45*day, updatedAt: now - 1*day },
-  { _id: 'u_fundi_4', email: 'njeri.carpentry@outlook.com', role: 'fundi', name: 'Grace Njeri', phone: '+254701999888', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 30*day, updatedAt: now - 3*day },
-  { _id: 'u_fundi_5', email: 'kipchoge.paint@gmail.com', role: 'fundi', name: 'Eliud Kipchoge', phone: '+254710555666', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 20*day, updatedAt: now - 1*day },
-  { _id: 'u_emp_1', email: 'fatma.homes@gmail.com', role: 'employer', name: 'Fatma Juma', phone: '+254724888999', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 120*day, updatedAt: now - 1*day },
-  { _id: 'u_emp_2', email: 'david.contractors@gmail.com', role: 'employer', name: 'David Kiprop', phone: '+254799777666', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 80*day, updatedAt: now - 2*day },
-  { _id: 'u_emp_3', email: 'wanjiku.estates@gmail.com', role: 'employer', name: 'Wanjiku Maina', phone: '+254711222333', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 40*day, updatedAt: now - 7*day },
-  { _id: 'u_admin_1', email: 'moderator@fundilink.co.ke', role: 'admin', name: 'Admin Chief', phone: '+254700000000', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 365*day, updatedAt: now },
+  { _id: 'u_fundi_1', email: 'kamau.mason@gmail.com', role: 'fundi', name: 'John Kamau', phone: '+254712345678', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 90*day, updatedAt: now - 2*day },
+  { _id: 'u_fundi_2', email: 'mwangi.plumber@yahoo.com', role: 'fundi', name: 'Peter Mwangi', phone: '+254722111222', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 60*day, updatedAt: now - 5*day },
+  { _id: 'u_fundi_3', email: 'amina.electric@gmail.com', role: 'fundi', name: 'Amina Onyango', phone: '+254733444555', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 45*day, updatedAt: now - 1*day },
+  { _id: 'u_fundi_4', email: 'njeri.carpentry@outlook.com', role: 'fundi', name: 'Grace Njeri', phone: '+254701999888', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 30*day, updatedAt: now - 3*day },
+  { _id: 'u_fundi_5', email: 'kipchoge.paint@gmail.com', role: 'fundi', name: 'Eliud Kipchoge', phone: '+254710555666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 20*day, updatedAt: now - 1*day },
+  { _id: 'u_emp_1', email: 'fatma.homes@gmail.com', role: 'employer', name: 'Fatma Juma', phone: '+254724888999', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 120*day, updatedAt: now - 1*day },
+  { _id: 'u_emp_2', email: 'david.contractors@gmail.com', role: 'employer', name: 'David Kiprop', phone: '+254799777666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 80*day, updatedAt: now - 2*day },
+  { _id: 'u_emp_3', email: 'wanjiku.estates@gmail.com', role: 'employer', name: 'Wanjiku Maina', phone: '+254711222333', avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 40*day, updatedAt: now - 7*day },
+  { _id: 'u_admin_1', email: 'moderator@fundilink.co.ke', role: 'admin', name: 'Admin Chief', phone: '+254700000000', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 365*day, updatedAt: now },
 ];
 
 export const SEED_PROFILES: Profile[] = [
-  { _id: 'p_1', userId: 'u_fundi_1', bio: 'Professional mason with 8+ years experience in foundation laying, bricklaying, and plastering for residential bungalows across Nairobi and Kiambu. NCA-certified.', skills: ['Masonry', 'Concrete Mixing', 'Tile Fitting', 'Foundation Repair'], county: 'Nairobi', hourlyRate: 450, avatarUrl: 'https://source.unsplash.com/160x160/?african,construction,worker,portrait,man', portfolioImages: ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=400&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=400&auto=format&fit=crop&q=80'], rating: 4.9, completedJobs: 34, verified: true, availability: 'available', createdAt: now - 90*day, updatedAt: now - 2*day },
-  { _id: 'p_2', userId: 'u_fundi_2', bio: 'Certified plumber expert in drainage unblocking, water meter installation, and modern PEX piping. Fast response time around Mombasa and coastal areas.', skills: ['Plumbing', 'Drainage', 'Pipe Fitting', 'Water Heater Repair'], county: 'Mombasa', hourlyRate: 400, avatarUrl: 'https://source.unsplash.com/160x160/?african,plumber,portrait,man', portfolioImages: ['https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&auto=format&fit=crop&q=80'], rating: 4.7, completedJobs: 21, verified: true, availability: 'available', createdAt: now - 60*day, updatedAt: now - 5*day },
-  { _id: 'p_3', userId: 'u_fundi_3', bio: 'EPRA-certified domestic electrician specializing in smart home wiring, solar panel installation, distribution board setup, and safety auditing across Kisumu and western Kenya.', skills: ['Electrical Wiring', 'Solar Installation', 'Fault Finding', 'Generator Setup'], county: 'Kisumu', hourlyRate: 500, avatarUrl: 'https://source.unsplash.com/160x160/?african,woman,electrician,portrait', portfolioImages: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&auto=format&fit=crop&q=80'], rating: 4.8, completedJobs: 19, verified: true, availability: 'busy', createdAt: now - 45*day, updatedAt: now - 1*day },
-  { _id: 'p_4', userId: 'u_fundi_4', bio: 'Custom furniture craftsman and roof framework carpenter. Bespoke designs for wardrobes, kitchen cabinets, and sturdy roofing rafters. Based in Kiambu with county-wide service.', skills: ['Carpentry', 'Roofing', 'Cabinet Making', 'Wood Varnishing'], county: 'Kiambu', hourlyRate: 420, avatarUrl: 'https://source.unsplash.com/160x160/?african,carpenter,portrait,woman', portfolioImages: ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&auto=format&fit=crop&q=80'], rating: 5.0, completedJobs: 12, verified: false, availability: 'available', createdAt: now - 30*day, updatedAt: now - 3*day },
-  { _id: 'p_5', userId: 'u_fundi_5', bio: 'Professional painter and gypsum ceiling artist. Specializing in interior/exterior finishing, decorative textures, and modern gypsum board designs for commercial and residential spaces.', skills: ['Painting', 'Gypsum Ceiling', 'Wall Texturing', 'Waterproofing'], county: 'Nakuru', hourlyRate: 380, avatarUrl: 'https://source.unsplash.com/160x160/?african,painter,portrait,man', portfolioImages: [], rating: 4.6, completedJobs: 8, verified: false, availability: 'available', createdAt: now - 20*day, updatedAt: now - 1*day },
+  { _id: 'p_1', userId: 'u_fundi_1', bio: 'Professional mason with 8+ years experience in foundation laying, bricklaying, and plastering for residential bungalows across Nairobi and Kiambu. NCA-certified.', skills: ['Masonry', 'Concrete Mixing', 'Tile Fitting', 'Foundation Repair'], county: 'Nairobi', hourlyRate: 450, avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80', portfolioImages: ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=400&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=400&auto=format&fit=crop&q=80'], rating: 4.9, completedJobs: 34, verified: true, availability: 'available', createdAt: now - 90*day, updatedAt: now - 2*day },
+  { _id: 'p_2', userId: 'u_fundi_2', bio: 'Certified plumber expert in drainage unblocking, water meter installation, and modern PEX piping. Fast response time around Mombasa and coastal areas.', skills: ['Plumbing', 'Drainage', 'Pipe Fitting', 'Water Heater Repair'], county: 'Mombasa', hourlyRate: 400, avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', portfolioImages: ['https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&auto=format&fit=crop&q=80'], rating: 4.7, completedJobs: 21, verified: true, availability: 'available', createdAt: now - 60*day, updatedAt: now - 5*day },
+  { _id: 'p_3', userId: 'u_fundi_3', bio: 'EPRA-certified domestic electrician specializing in smart home wiring, solar panel installation, distribution board setup, and safety auditing across Kisumu and western Kenya.', skills: ['Electrical Wiring', 'Solar Installation', 'Fault Finding', 'Generator Setup'], county: 'Kisumu', hourlyRate: 500, avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', portfolioImages: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&auto=format&fit=crop&q=80'], rating: 4.8, completedJobs: 19, verified: true, availability: 'busy', createdAt: now - 45*day, updatedAt: now - 1*day },
+  { _id: 'p_4', userId: 'u_fundi_4', bio: 'Custom furniture craftsman and roof framework carpenter. Bespoke designs for wardrobes, kitchen cabinets, and sturdy roofing rafters. Based in Kiambu with county-wide service.', skills: ['Carpentry', 'Roofing', 'Cabinet Making', 'Wood Varnishing'], county: 'Kiambu', hourlyRate: 420, avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=160&fit=crop&crop=face&q=80', portfolioImages: ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&auto=format&fit=crop&q=80'], rating: 5.0, completedJobs: 12, verified: false, availability: 'available', createdAt: now - 30*day, updatedAt: now - 3*day },
+  { _id: 'p_5', userId: 'u_fundi_5', bio: 'Professional painter and gypsum ceiling artist. Specializing in interior/exterior finishing, decorative textures, and modern gypsum board designs for commercial and residential spaces.', skills: ['Painting', 'Gypsum Ceiling', 'Wall Texturing', 'Waterproofing'], county: 'Nakuru', hourlyRate: 380, avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', portfolioImages: [], rating: 4.6, completedJobs: 8, verified: false, availability: 'available', createdAt: now - 20*day, updatedAt: now - 1*day },
 ];
 
 export const SEED_JOBS: Job[] = [

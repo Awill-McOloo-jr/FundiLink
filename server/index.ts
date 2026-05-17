@@ -9,6 +9,7 @@ import {
   SEED_PROFILES,
   SEED_REVIEWS,
   SEED_USERS,
+  defaultAvatarForUser,
   generateId,
   generateOTP,
   getJobCategory,
@@ -19,6 +20,7 @@ import {
   type Message,
   type Payment,
   type Profile,
+  type ProfileViewEvent,
   type Review,
   type User,
 } from '../src/db/schema';
@@ -32,6 +34,7 @@ type BootstrapState = {
   reviews: Review[];
   payments: Payment[];
   profileViews: Record<string, number>;
+  profileViewEvents: ProfileViewEvent[];
 };
 
 const db = new Database('server/fundilink.sqlite');
@@ -82,6 +85,7 @@ function getState(): BootstrapState {
     reviews: readJson('reviews', SEED_REVIEWS),
     payments: readJson('payments', SEED_PAYMENTS),
     profileViews: readJson('profileViews', {}),
+    profileViewEvents: readJson('profileViewEvents', []),
   };
 }
 
@@ -94,6 +98,10 @@ function seedIfEmpty() {
 
 function normalizeExistingState() {
   const state = getState();
+  const users = state.users.map(user => ({
+    ...user,
+    avatarUrl: user.avatarUrl || SEED_USERS.find(seedUser => seedUser._id === user._id)?.avatarUrl || defaultAvatarForUser(user.role, user.name),
+  }));
   const existingJobsById = new Map(state.jobs.map(job => [job._id, job]));
   const jobsWithSeedBackfill = [
     ...state.jobs,
@@ -103,14 +111,24 @@ function normalizeExistingState() {
     category: SEED_JOBS.find(seedJob => seedJob._id === job._id)?.category || getJobCategory({ ...job, category: undefined }),
   }));
 
-  const profiles = state.profiles.map(profile => ({
-    ...profile,
-    verificationStatus: profile.verificationStatus || (profile.verified ? 'verified' : 'unverified'),
-    verificationDocuments: profile.verificationDocuments || [],
-    cvInsights: profile.cvInsights || [],
-  }));
+  const profiles = state.profiles.map(profile => {
+    const seedProfile = SEED_PROFILES.find(item => item.userId === profile.userId);
+    const hasUploadedAvatar = profile.avatarUrl.startsWith('data:');
+    const avatarUrl = hasUploadedAvatar
+      ? profile.avatarUrl
+      : profile.avatarUrl.includes('source.unsplash.com/160x160')
+        ? seedProfile?.avatarUrl || profile.avatarUrl
+        : profile.avatarUrl;
+    return {
+      ...profile,
+      avatarUrl,
+      verificationStatus: profile.verificationStatus || (profile.verified ? 'verified' : 'unverified'),
+      verificationDocuments: profile.verificationDocuments || [],
+      cvInsights: profile.cvInsights || [],
+    };
+  });
 
-  patchState({ jobs: jobsWithSeedBackfill, profiles });
+  patchState({ users, jobs: jobsWithSeedBackfill, profiles });
 }
 
 function patchState(patch: Partial<BootstrapState>) {
@@ -163,6 +181,7 @@ app.post('/api/auth/signup', (req, res) => {
     role: data.role,
     name: data.name,
     phone: data.phone.startsWith('+254') ? data.phone : `+254${data.phone.replace(/^0/, '')}`,
+    avatarUrl: defaultAvatarForUser(data.role, data.name),
     passwordHash: hashPassword(data.password),
     isSuspended: false,
     createdAt: Date.now(),
@@ -198,7 +217,7 @@ app.post('/api/auth/verify', (req, res) => {
           skills: ['Masonry'],
           county: 'Nairobi',
           hourlyRate: 350,
-          avatarUrl: 'https://source.unsplash.com/160x160/?african,construction,worker,portrait',
+          avatarUrl: currentUser.avatarUrl || defaultAvatarForUser(currentUser.role, currentUser.name),
           cvInsights: [],
           verificationDocuments: [],
           verificationStatus: 'unverified',

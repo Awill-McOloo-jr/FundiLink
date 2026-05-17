@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { COUNTIES, SKILL_OPTIONS, formatKSh, type Application, type Job, type Profile } from '../db/schema';
+import { COUNTIES, SKILL_OPTIONS, formatKSh, timeAgo, type Application, type Job, type ProfileViewEvent } from '../db/schema';
 import {
   AlertTriangle,
   Award,
@@ -11,12 +11,13 @@ import {
   Bot,
   BriefcaseBusiness,
   Building2,
-  Camera,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
   Eye,
   FileText,
   FolderKanban,
+  Lightbulb,
   Layers,
   MapPinned,
   MessageSquare,
@@ -25,10 +26,7 @@ import {
   Shield,
   SlidersHorizontal,
   Star,
-  Target,
   TrendingUp,
-  UploadCloud,
-  User,
   Video,
   XCircle,
   Zap,
@@ -38,9 +36,10 @@ interface FundiDashboardProps {
   jobs: Job[];
   applications: Application[];
   onNavigate: (page: string) => void;
+  onOpenJob: (jobId: string) => void;
   showToast: (msg: string) => void;
-  updateProfile: (userId: string, updates: Partial<Profile>) => void;
   profileViews: number;
+  profileViewEvents: ProfileViewEvent[];
 }
 
 const SKILL_CATEGORIES: Record<string, string[]> = {
@@ -86,14 +85,19 @@ function getJobLevel(job: Job) {
   return 'Junior';
 }
 
-export default function FundiDashboard({ jobs, applications, onNavigate, showToast, updateProfile, profileViews }: FundiDashboardProps) {
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJob, showToast, profileViews, profileViewEvents }: FundiDashboardProps) {
   const { currentUser, profiles } = useAuth();
   const myProfile = currentUser ? profiles.find(p => p.userId === currentUser._id) : undefined;
 
-  const [editBio, setEditBio] = useState(myProfile?.bio || '');
-  const [editRate, setEditRate] = useState(myProfile?.hourlyRate || 350);
-  const [editCounty, setEditCounty] = useState(myProfile?.county || 'Nairobi');
-  const [editSkills, setEditSkills] = useState(myProfile?.skills.join(', ') || '');
   const [filterCounty, setFilterCounty] = useState(myProfile?.county || 'All Counties');
   const [radius, setRadius] = useState(60);
   const [minBudget, setMinBudget] = useState(10000);
@@ -103,33 +107,43 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
   const [workArrangement, setWorkArrangement] = useState('Any');
   const [companyType, setCompanyType] = useState('Any');
   const [savedSearches, setSavedSearches] = useState<string[]>(['Nearby high-match jobs', 'Verified employers over KSh 25k']);
-  const [photoPreview, setPhotoPreview] = useState(myProfile?.avatarUrl || '');
-  const [cvFileName, setCvFileName] = useState('');
-  const [cvInsights, setCvInsights] = useState<string[]>([]);
+  const [recommendationPage, setRecommendationPage] = useState(0);
+  const [showAllApplications, setShowAllApplications] = useState(false);
 
   useEffect(() => {
-    setEditBio(myProfile?.bio || '');
-    setEditRate(myProfile?.hourlyRate || 350);
-    setEditCounty(myProfile?.county || 'Nairobi');
-    setEditSkills(myProfile?.skills.join(', ') || '');
     setFilterCounty(myProfile?.county || 'All Counties');
-    setPhotoPreview(myProfile?.avatarUrl || '');
   }, [myProfile]);
 
   const myApps = useMemo(
     () => currentUser ? applications.filter(a => a.fundiId === currentUser._id) : [],
     [applications, currentUser]
   );
+  const sortedApplications = useMemo(
+    () => [...myApps].sort((a, b) => b.updatedAt - a.updatedAt),
+    [myApps]
+  );
+  const appliedJobIds = useMemo(() => new Set(myApps.map(app => app.jobId)), [myApps]);
   const profileSkills = myProfile?.skills || [];
   const completedJobs = myProfile?.completedJobs || 0;
-  const hiredApplications = myApps.filter(a => a.status === 'hired').length;
-  const successRate = myApps.length ? Math.round((hiredApplications / myApps.length) * 100) : 0;
+  const successfulApplications = myApps.filter(app => ['offered', 'hired'].includes(app.status)).length;
+  const successRate = myApps.length ? Math.round((successfulApplications / myApps.length) * 100) : 0;
+  const pendingApplications = myApps.filter(app => app.status === 'pending').length;
+  const shortlistedApplications = myApps.filter(app => ['reviewed', 'interviewed'].includes(app.status)).length;
+  const hiredOrOfferedApplications = successfulApplications;
+  const rejectedApplications = myApps.filter(app => ['rejected', 'withdrawn'].includes(app.status)).length;
+  const applicationStatusCards = [
+    { label: 'Applied', value: myApps.length, helper: 'Total job applications sent', icon: ClipboardCheck, tone: 'text-blue-300' },
+    { label: 'Pending', value: pendingApplications, helper: 'Waiting for employer review', icon: Bell, tone: 'text-amber-300' },
+    { label: 'Shortlisted', value: shortlistedApplications, helper: 'Reviewed or invited to interview', icon: Star, tone: 'text-cyan-300' },
+    { label: 'Hired / offered', value: hiredOrOfferedApplications, helper: 'Positive hiring outcomes', icon: Award, tone: 'text-emerald-300' },
+    { label: 'Rejected', value: rejectedApplications, helper: 'Closed without selection', icon: XCircle, tone: 'text-red-300' },
+  ];
 
   const matchedJobs = useMemo(() => {
     const skillSet = new Set(profileSkills.map(skill => skill.toLowerCase()));
 
     return jobs
-      .filter(job => job.status === 'active')
+      .filter(job => job.status === 'active' && !appliedJobIds.has(job._id))
       .map(job => {
         const matchedSkills = job.skills.filter(skill => skillSet.has(skill.toLowerCase()));
         const adjacentSkills = job.skills.filter(skill =>
@@ -144,13 +158,13 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
         const locationScore = job.county === myProfile?.county ? 18 : Math.max(0, 18 - Math.round(distance / 18));
         const salaryScore = job.budget >= minBudget && job.budget <= maxBudget ? 14 : job.budget > maxBudget ? 8 : 4;
         const preferenceScore = (workArrangement === 'Any' || workArrangement === workMode ? 5 : 1) + (companyType === 'Any' || companyType === type ? 5 : 1);
-        const hiredSignal = myApps.some(app => app.status === 'hired' && matchedSkills.some(skill => app.fundiSkill.toLowerCase().includes(skill.toLowerCase())));
+        const hiredSignal = myApps.some(app => ['offered', 'hired'].includes(app.status) && matchedSkills.some(skill => app.fundiSkill.toLowerCase().includes(skill.toLowerCase())));
         const score = Math.min(98, skillScore + experienceScore + locationScore + salaryScore + preferenceScore + (hiredSignal ? 6 : 2));
 
         return { job, matchedSkills, adjacentSkills, distance, level, workMode, companyType: type, score };
       })
       .sort((a, b) => b.score - a.score);
-  }, [jobs, profileSkills, myProfile?.county, completedJobs, minBudget, maxBudget, workArrangement, companyType, myApps]);
+  }, [jobs, appliedJobIds, profileSkills, myProfile?.county, completedJobs, minBudget, maxBudget, workArrangement, companyType, myApps]);
 
   const filteredJobs = matchedJobs.filter(({ job, distance, level, workMode, companyType: type }) => {
     const locationOk = filterCounty === 'All Counties' || job.county === filterCounty || distance <= radius;
@@ -162,16 +176,24 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
     return locationOk && budgetOk && levelOk && skillOk && workOk && companyOk;
   });
 
-  const parsedSkillGroups = Object.entries(SKILL_CATEGORIES)
-    .map(([category, skills]) => ({
-      category,
-      skills: profileSkills.filter(skill => skills.includes(skill)),
-    }))
-    .filter(group => group.skills.length > 0);
+  useEffect(() => {
+    setRecommendationPage(0);
+  }, [filterCounty, radius, minBudget, maxBudget, experienceLevel, techStack, workArrangement, companyType, currentUser?._id]);
 
-  const openSkillMatches = jobs.filter(job => job.status === 'active' && job.skills.some(skill => profileSkills.includes(skill))).length;
+  const recommendationPageSize = 3;
+  const recommendationTotalPages = Math.max(1, Math.ceil(filteredJobs.length / recommendationPageSize));
+  const safeRecommendationPage = Math.min(recommendationPage, recommendationTotalPages - 1);
+  const visibleRecommendations = filteredJobs.slice(
+    safeRecommendationPage * recommendationPageSize,
+    safeRecommendationPage * recommendationPageSize + recommendationPageSize
+  );
+
+  const openSkillMatches = jobs.filter(job => job.status === 'active' && !appliedJobIds.has(job._id) && job.skills.some(skill => profileSkills.includes(skill))).length;
   const topMatch = matchedJobs[0];
-  const cvInsightList = myProfile?.cvInsights?.length ? myProfile.cvInsights : cvInsights;
+  const recentProfileViewers = [...profileViewEvents].sort((a, b) => b.viewedAt - a.viewedAt).slice(0, 4);
+  const earlierUntrackedViews = Math.max(0, profileViews - profileViewEvents.length);
+  const displayedApplications = showAllApplications ? sortedApplications : sortedApplications.slice(0, 1);
+  const cvInsightList = myProfile?.cvInsights || [];
   const verificationDocuments = myProfile?.verificationDocuments || [];
   const readinessItems = [
     { label: 'Profile photo', done: Boolean(myProfile?.avatarUrl), detail: 'Helps employers identify you quickly.' },
@@ -180,7 +202,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
     { label: 'Verification', done: Boolean(myProfile?.verified), detail: myProfile?.verified ? 'Verified profile.' : `${verificationDocuments.length} evidence file(s) uploaded.` },
   ];
   const readinessScore = Math.round((readinessItems.filter(item => item.done).length / readinessItems.length) * 100);
-  const latestApplication = [...myApps].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const latestApplication = sortedApplications[0];
   const latestApplicationJob = latestApplication ? jobs.find(job => job._id === latestApplication.jobId) : undefined;
   const statusMessage = latestApplication
     ? latestApplication.status === 'pending'
@@ -207,6 +229,30 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
       ? `Profile is ${readinessScore}% complete. Finish ${readinessItems.filter(item => !item.done).map(item => item.label.toLowerCase()).join(', ')} in the profile tab.`
       : 'Profile is complete and ready for employer review.',
   ];
+  const strongestSkill = profileSkills[0] || topMatch?.matchedSkills[0] || 'your strongest trade';
+  const applicationTips = [
+    {
+      title: 'Open with the exact job need',
+      body: topMatch
+        ? `Mention ${topMatch.matchedSkills[0] || topMatch.job.skills[0]} first, then show one similar job you completed.`
+        : `Lead with ${strongestSkill} and the kind of site you handle best.`,
+      icon: Lightbulb,
+    },
+    {
+      title: 'Send proof before the employer asks',
+      body: cvInsightList.length
+        ? 'Your CV has useful signals. Add one photo or certificate that backs up the same skill.'
+        : 'Upload your CV and one clear site photo so employers can verify your experience faster.',
+      icon: FileText,
+    },
+    {
+      title: 'Follow up pending applications',
+      body: pendingApplications > 0
+        ? `${pendingApplications} pending application(s) can get a polite follow-up after a day.`
+        : 'When an application is pending, follow up once with availability, tools, and start date.',
+      icon: Clock3,
+    },
+  ];
 
   if (!currentUser || currentUser.role !== 'fundi') {
     return (
@@ -220,79 +266,21 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
     );
   }
 
-  const handleSaveProfile = (e: FormEvent) => {
-    e.preventDefault();
-    updateProfile(currentUser._id, {
-      bio: editBio,
-      hourlyRate: editRate,
-      county: editCounty,
-      skills: editSkills.split(',').map(s => s.trim()).filter(Boolean),
-    });
-    showToast('Profile updated. Match scoring and recommendations refreshed.');
-  };
-
   const handleSaveSearch = () => {
     const label = `${filterCounty === 'All Counties' ? 'All counties' : filterCounty} / ${techStack} / ${formatKSh(minBudget)}-${formatKSh(maxBudget)}`;
     setSavedSearches(prev => prev.includes(label) ? prev : [label, ...prev].slice(0, 4));
     showToast('Search preference saved for future job alerts.');
   };
 
-  const extractCvInsights = (text: string, fileName: string) => {
-    const source = `${text} ${fileName}`.toLowerCase();
-    const detectedSkills = SKILL_OPTIONS
-      .filter(skill => skill !== 'All Skills' && source.includes(skill.toLowerCase()))
-      .slice(0, 5);
-    const yearMatch = source.match(/(\d+)\+?\s*(years|yrs|year)/);
-    const certifications = ['nca', 'epra', 'safety', 'osha']
-      .filter(term => source.includes(term))
-      .map(term => term.toUpperCase());
-    const insights = [
-      detectedSkills.length
-        ? `Skills detected: ${detectedSkills.join(', ')}.`
-        : `Skills inferred from profile: ${profileSkills.slice(0, 4).join(', ') || 'Add skills to improve parsing.'}`,
-      yearMatch
-        ? `Experience signal: ${yearMatch[1]} years mentioned in the CV.`
-        : `Experience signal: ${completedJobs} completed Fundilink jobs currently strengthen your profile.`,
-      certifications.length
-        ? `Certification keywords found: ${certifications.join(', ')}.`
-        : myProfile?.verified
-          ? 'Certification signal: profile is already marked verified.'
-          : 'Certification gap: upload licenses such as NCA or EPRA to improve trust.',
-      'Employer-facing summary refreshed for matching and shortlist review.',
-    ];
-    setCvInsights(insights);
-  };
-
-  const handlePhotoUpload = (file?: File) => {
-    if (!file || !currentUser) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const avatarUrl = String(reader.result);
-      setPhotoPreview(avatarUrl);
-      updateProfile(currentUser._id, { avatarUrl });
-      showToast('Profile photo updated.');
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleCvUpload = (file?: File) => {
-    if (!file) return;
-    setCvFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      extractCvInsights(String(reader.result || ''), file.name);
-      showToast('CV scanned and profile insights generated.');
-    };
-    reader.onerror = () => {
-      extractCvInsights('', file.name);
-      showToast('CV uploaded. Insights were inferred from the filename and current profile.');
-    };
-    reader.readAsText(file);
-  };
-
   const handleRecommendAction = (job: Job) => {
-    showToast(`Opening matching jobs. ${job.title} is ready for application review.`);
-    onNavigate('jobs');
+    showToast(`Opening ${job.title} for application review.`);
+    onOpenJob(job._id);
+  };
+
+  const handleApplicationFollowUp = (app: Application) => {
+    const job = jobs.find(item => item._id === app.jobId);
+    showToast(`Follow-up opened for ${job?.title || 'this application'}.`);
+    onNavigate('messages');
   };
 
   return (
@@ -311,22 +299,28 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {[
-                { label: 'Match score', value: `${topMatch?.score || 0}%`, icon: Target, tone: 'text-emerald-300' },
-                { label: 'Profile views', value: profileViews, icon: Eye, tone: 'text-blue-300' },
-                { label: 'Success rate', value: `${successRate}%`, icon: TrendingUp, tone: 'text-amber-300' },
-                { label: 'Open skill matches', value: openSkillMatches, icon: Search, tone: 'text-cyan-300' },
-              ].map(metric => {
-                const Icon = metric.icon;
-                return (
-                  <div key={metric.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-                    <Icon className={`h-4 w-4 ${metric.tone}`} />
-                    <p className="mt-3 text-2xl font-black">{metric.value}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{metric.label}</p>
-                  </div>
-                );
-              })}
+            <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Application pipeline</p>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-300">
+                  Live from your applications
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+                {applicationStatusCards.map(card => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={card.label} className="rounded-lg bg-slate-900/70 p-3 ring-1 ring-white/10">
+                      <div className="flex items-center justify-between gap-2">
+                        <Icon className={`h-4 w-4 ${card.tone}`} />
+                        <p className="text-2xl font-black text-white">{card.value}</p>
+                      </div>
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{card.label}</p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">{card.helper}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -334,21 +328,28 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Best recommendation</p>
-                <h2 className="mt-1 text-lg font-black">{topMatch?.job.title || 'No active matches yet'}</h2>
+                <h2 className="mt-1 text-lg font-black">{topMatch?.job.title || 'No fresh recommendations'}</h2>
               </div>
               <span className="rounded-md bg-emerald-400 px-2.5 py-1 text-xs font-black text-slate-950">{topMatch?.score || 0}%</span>
             </div>
             <div className="mt-4 space-y-2 text-xs text-slate-300">
-              <p className="flex items-center gap-2"><MapPinned className="h-3.5 w-3.5 text-blue-300" /> {topMatch?.job.county || editCounty} within {topMatch?.distance || 0} km match radius</p>
-              <p className="flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-amber-300" /> {formatKSh(topMatch?.job.budget || 0)} budget compatibility</p>
-              <p className="flex items-center gap-2"><BriefcaseBusiness className="h-3.5 w-3.5 text-emerald-300" /> {topMatch?.workMode || 'Onsite'} with {topMatch?.companyType || 'Homeowner'} client type</p>
+              {topMatch ? (
+                <>
+                  <p className="flex items-center gap-2"><MapPinned className="h-3.5 w-3.5 text-blue-300" /> {topMatch.job.county} within {topMatch.distance} km match radius</p>
+                  <p className="flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-amber-300" /> {formatKSh(topMatch.job.budget)} budget compatibility</p>
+                  <p className="flex items-center gap-2"><BriefcaseBusiness className="h-3.5 w-3.5 text-emerald-300" /> {topMatch.workMode} with {topMatch.companyType} client type</p>
+                </>
+              ) : (
+                <p className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> You have already applied to the current matching jobs. New active jobs will appear here automatically.</p>
+              )}
             </div>
             <button
               onClick={() => topMatch && handleRecommendAction(topMatch.job)}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-blue-50"
+              disabled={!topMatch}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-slate-500"
             >
               <Send className="h-3.5 w-3.5" />
-              Review recommended job
+              {topMatch ? 'Review recommended job' : 'Waiting for new matching jobs'}
             </button>
           </div>
         </div>
@@ -365,7 +366,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
             Save preset
           </button>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-8">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Location
             <select value={filterCounty} onChange={(e) => setFilterCounty(e.target.value)}
@@ -388,12 +389,30 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
             <input type="number" value={maxBudget} onChange={(e) => setMaxBudget(Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800" />
           </label>
-          <select value={techStack} onChange={(e) => setTechStack(e.target.value)} className="self-end rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-            {SKILL_OPTIONS.map(skill => <option key={skill}>{skill}</option>)}
-          </select>
-          <select value={workArrangement} onChange={(e) => setWorkArrangement(e.target.value)} className="self-end rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-            {['Any', 'Onsite', 'Hybrid', 'Remote'].map(mode => <option key={mode}>{mode}</option>)}
-          </select>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Skill
+            <select value={techStack} onChange={(e) => setTechStack(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal">
+              {SKILL_OPTIONS.map(skill => <option key={skill}>{skill}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Work mode
+            <select value={workArrangement} onChange={(e) => setWorkArrangement(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal">
+              {['Any', 'Onsite', 'Hybrid', 'Remote'].map(mode => <option key={mode}>{mode}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Level
+            <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal">
+              {['Any', 'Junior', 'Mid', 'Senior'].map(level => <option key={level}>{level}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Client type
+            <select value={companyType} onChange={(e) => setCompanyType(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal">
+              {['Any', 'Homeowner', 'Contractor', 'Estate'].map(type => <option key={type}>{type}</option>)}
+            </select>
+          </label>
         </div>
         {savedSearches.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -417,7 +436,11 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                 <span className="rounded-md bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#005fec]">{filteredJobs.length} matches</span>
               </div>
               <div className="mt-4 space-y-3">
-                {filteredJobs.slice(0, 4).map(({ job, matchedSkills, adjacentSkills, score, distance, level, workMode, companyType: type }) => (
+                {filteredJobs.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm leading-6 text-slate-500">
+                    No unapplied jobs match the current filters. Clear filters or wait for new jobs from employers.
+                  </div>
+                ) : visibleRecommendations.map(({ job, matchedSkills, adjacentSkills, score, distance, level, workMode, companyType: type }) => (
                   <div key={job._id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -449,46 +472,92 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                   </div>
                 ))}
               </div>
+              {filteredJobs.length > recommendationPageSize && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                  <p className="text-[11px] font-bold text-slate-500">
+                    Showing {safeRecommendationPage * recommendationPageSize + 1}-{Math.min(filteredJobs.length, (safeRecommendationPage + 1) * recommendationPageSize)} of {filteredJobs.length} matching jobs
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRecommendationPage(page => Math.max(0, page - 1))}
+                      disabled={safeRecommendationPage === 0}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">
+                      {safeRecommendationPage + 1}/{recommendationTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setRecommendationPage(page => Math.min(recommendationTotalPages - 1, page + 1))}
+                      disabled={safeRecommendationPage >= recommendationTotalPages - 1}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <Bot className="h-4 w-4 text-[#005fec]" />
-                Matching engine
+                <Lightbulb className="h-4 w-4 text-[#005fec]" />
+                Application coach
               </h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Practical moves that help a fundi stand out before an employer shortlists.
+              </p>
               <div className="mt-4 space-y-3">
-                {parsedSkillGroups.map(group => (
-                  <div key={group.category} className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{group.category}</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {group.skills.map((skill, index) => (
-                        <span key={skill} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200">
-                          {skill} / {index === 0 ? 'Expert' : index === 1 ? 'Advanced' : 'Working'}
+                {applicationTips.map(tip => {
+                  const TipIcon = tip.icon;
+                  return (
+                    <div key={tip.title} className="rounded-lg bg-slate-50 p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#005fec] ring-1 ring-slate-200">
+                          <TipIcon className="h-4 w-4" />
                         </span>
-                      ))}
+                        <div>
+                          <p className="text-xs font-black text-slate-900">{tip.title}</p>
+                          <p className="mt-1 text-[11px] leading-5 text-slate-500">{tip.body}</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
-                  <p className="font-black">Learning signals</p>
-                  <p className="mt-1">Applications, accepts, rejects, and hiring outcomes tune future rankings.</p>
-                </div>
+                  );
+                })}
+                <button
+                  onClick={() => onNavigate('profile')}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-800 transition hover:bg-blue-50 hover:text-[#005fec]"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Improve profile evidence
+                </button>
               </div>
             </div>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <Layers className="h-4 w-4 text-[#005fec]" />
-                Application management
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
+                  <Layers className="h-4 w-4 text-[#005fec]" />
+                  Application management
+                </h2>
+                {myApps.length > 1 && (
+                  <button
+                    onClick={() => setShowAllApplications(prev => !prev)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {showAllApplications ? 'Show latest only' : `View all ${myApps.length}`}
+                  </button>
+                )}
+              </div>
               <div className="mt-4 space-y-3">
                 {myApps.length === 0 ? (
                   <div className="rounded-lg bg-slate-50 p-6 text-center text-xs text-slate-500">
                     No applications yet. <button onClick={() => onNavigate('jobs')} className="font-black text-[#005fec]">Browse jobs</button>
                   </div>
-                ) : myApps.map(app => {
+                ) : displayedApplications.map(app => {
                   const job = jobs.find(j => j._id === app.jobId);
                   const reviewed = ['reviewed', 'interviewed', 'offered', 'hired', 'rejected'].includes(app.status);
                   const interviewed = ['interviewed', 'offered', 'hired'].includes(app.status);
@@ -530,6 +599,15 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                           <MessageSquare className="h-3.5 w-3.5" />
                           Message
                         </button>
+                        {app.status === 'pending' && (
+                          <button
+                            onClick={() => handleApplicationFollowUp(app)}
+                            className="flex items-center gap-1.5 rounded-md bg-slate-950 px-3 py-1.5 text-[11px] font-black text-white transition hover:bg-slate-800"
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Follow up
+                          </button>
+                        )}
                         <span className="rounded-md bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
                           {app.status === 'pending' && 'Notification: your application was sent.'}
                           {app.status === 'reviewed' && 'Notification: employer is reviewing your profile.'}
@@ -542,6 +620,29 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                     </div>
                   );
                 })}
+                {myApps.length > 1 && (
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status of all applications</p>
+                    <div className="mt-3 space-y-2">
+                      {sortedApplications.map(app => {
+                        const job = jobs.find(item => item._id === app.jobId);
+                        return (
+                          <div key={`status-${app._id}`} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="min-w-0 truncate font-bold text-slate-700">{job?.title || 'Unknown job'}</span>
+                            <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-black uppercase ${
+                              app.status === 'hired' || app.status === 'offered' ? 'bg-emerald-100 text-emerald-800' :
+                              app.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              app.status === 'interviewed' || app.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {app.status === 'hired' ? 'Hired' : app.status}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -589,6 +690,45 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                   ))}
                 </div>
               </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
+                    <Eye className="h-4 w-4 text-[#005fec]" />
+                    Profile viewers
+                  </h2>
+                  <span className="rounded-md bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#005fec]">
+                    {profileViews} total
+                  </span>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {recentProfileViewers.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+                      No named viewers recorded yet. New profile visits will show the viewer, avatar, and time here.
+                    </div>
+                  ) : recentProfileViewers.map(view => (
+                    <div key={view._id} className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+                      {view.viewerAvatarUrl ? (
+                        <img src={view.viewerAvatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                          {getInitials(view.viewerName)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black text-slate-900">{view.viewerName}</p>
+                        <p className="text-[11px] capitalize text-slate-500">{view.viewerRole === 'guest' ? 'Guest visitor' : view.viewerRole}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-bold text-slate-400">{timeAgo(view.viewedAt)}</span>
+                    </div>
+                  ))}
+                  {earlierUntrackedViews > 0 && (
+                    <p className="rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">
+                      {earlierUntrackedViews} earlier view{earlierUntrackedViews === 1 ? '' : 's'} happened before viewer tracking was enabled.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -621,8 +761,8 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {[
-                { label: 'Profile views', value: profileViews, helper: 'Recorded public profile visits', icon: Eye },
-                { label: 'Application success', value: `${successRate}%`, helper: `${hiredApplications}/${myApps.length} hired applications`, icon: TrendingUp },
+                { label: 'Profile views', value: profileViews, helper: `${profileViewEvents.length} named, ${earlierUntrackedViews} earlier untracked`, icon: Eye },
+                { label: 'Application success', value: `${successRate}%`, helper: `${successfulApplications}/${myApps.length} offered or hired applications`, icon: TrendingUp },
                 { label: 'Open skill matches', value: openSkillMatches, helper: 'Active jobs requiring your skills', icon: Search },
               ].map(item => {
                 const Icon = item.icon;

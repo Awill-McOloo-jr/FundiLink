@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { SEED_PROFILES, SEED_USERS, type Profile, type User, type UserRole } from '../db/schema';
+import { SEED_PROFILES, SEED_USERS, defaultAvatarForUser, type Profile, type User, type UserRole } from '../db/schema';
 
 interface AuthResult {
   success: boolean;
@@ -29,6 +29,9 @@ const CURRENT_USER_KEY = 'fundilink.current-user-id';
 const defaultAfricanAvatars: Record<string, string> = Object.fromEntries(
   SEED_PROFILES.map(profile => [profile.userId, profile.avatarUrl])
 );
+const defaultUserAvatars: Record<string, string> = Object.fromEntries(
+  SEED_USERS.map(user => [user._id, user.avatarUrl || defaultAvatarForUser(user.role, user.name)])
+);
 
 const oldDefaultAvatarMarkers = [
   'photo-1540569014015-19a7be504e3a',
@@ -37,6 +40,7 @@ const oldDefaultAvatarMarkers = [
   'photo-1580489944761-15a19d654956',
   'photo-1507003211169-0a1dd7228f2d',
   'photo-1534528741775-53994a69daeb',
+  'source.unsplash.com/160x160',
 ];
 
 function migrateProfiles(profiles: Profile[]) {
@@ -49,6 +53,13 @@ function migrateProfiles(profiles: Profile[]) {
       avatarUrl: defaultAfricanAvatars[profile.userId] || profile.avatarUrl,
     };
   });
+}
+
+function migrateUsers(users: User[]) {
+  return users.map(user => ({
+    ...user,
+    avatarUrl: user.avatarUrl || defaultUserAvatars[user._id] || defaultAvatarForUser(user.role, user.name),
+  }));
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -75,11 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(res => res.json())
       .then((state: { users: User[]; profiles: Profile[] }) => {
         if (!alive) return;
+        const migratedUsers = migrateUsers(state.users);
         const migratedProfiles = migrateProfiles(state.profiles);
         const currentUserId = window.localStorage.getItem(CURRENT_USER_KEY);
-        setUsers(state.users);
+        setUsers(migratedUsers);
         setProfiles(migratedProfiles);
-        setCurrentUser(currentUserId ? state.users.find(user => user._id === currentUserId) || null : null);
+        setCurrentUser(currentUserId ? migratedUsers.find(user => user._id === currentUserId) || null : null);
         setAuthStep(currentUserId ? 'authenticated' : 'idle');
         setServerLoaded(true);
       })
@@ -120,9 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyOTP = useCallback(async (code: string) => {
     const result = await postJson<AuthResult & { currentUser?: User; users?: User[]; profiles?: Profile[] }>('/api/auth/verify', { code });
     if (result.success && result.currentUser && result.users && result.profiles) {
-      setUsers(result.users);
+      const migratedUsers = migrateUsers(result.users);
+      setUsers(migratedUsers);
       setProfiles(migrateProfiles(result.profiles));
-      setCurrentUser(result.currentUser);
+      setCurrentUser(migratedUsers.find(user => user._id === result.currentUser?._id) || result.currentUser);
       setAuthStep('authenticated');
       setPendingUser(null);
       setOtpCode('');

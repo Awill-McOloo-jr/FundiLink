@@ -35,8 +35,10 @@ type NavItem = {
 };
 
 export default function Layout({ children, currentPage, onNavigate, toast, onDismissToast }: LayoutProps) {
-  const { currentUser, isAuthenticated, logout } = useAuth();
+  const { currentUser, isAuthenticated, logout, profiles } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
+  const currentProfile = currentUser ? profiles.find(profile => profile.userId === currentUser._id) : undefined;
+  const currentAvatarUrl = currentProfile?.avatarUrl || currentUser?.avatarUrl;
 
   const dashboardPage: Page =
     currentUser?.role === 'employer' ? 'dashboard-employer' :
@@ -124,7 +126,11 @@ export default function Layout({ children, currentPage, onNavigate, toast, onDis
             aria-label="Account"
             title={currentUser ? currentUser.name : 'Sign in'}
           >
-            <UserRound className="h-5 w-5" />
+            {currentAvatarUrl ? (
+              <img src={currentAvatarUrl} alt={currentUser?.name || 'Account'} className="h-full w-full rounded-2xl object-cover" />
+            ) : (
+              <UserRound className="h-5 w-5" />
+            )}
           </button>
 
           {accountOpen && (
@@ -132,9 +138,13 @@ export default function Layout({ children, currentPage, onNavigate, toast, onDis
               {currentUser ? (
                 <>
                   <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#005fec] text-sm font-black uppercase text-white">
-                      {currentUser.name.slice(0, 2)}
-                    </div>
+                    {currentAvatarUrl ? (
+                      <img src={currentAvatarUrl} alt={currentUser.name} className="h-10 w-10 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#005fec] text-sm font-black uppercase text-white">
+                        {currentUser.name.slice(0, 2)}
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black">{currentUser.name}</p>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{currentUser.role}</p>
@@ -182,9 +192,8 @@ export default function Layout({ children, currentPage, onNavigate, toast, onDis
       <main className="min-h-screen pl-16 lg:pl-20">
         {children}
         <footer className="border-t border-slate-200 bg-white px-6 py-5 text-xs text-slate-500 lg:px-8">
-          <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-semibold">Fundilink Technologies™ Nairobi, Kenya.</p>
-            <p>SQLite-backed users, profiles, jobs, messages, applications, and matching workflows.</p>
+          <div className="mx-auto max-w-7xl">
+            <p className="font-semibold">Fundilink Technologies&trade;</p>
           </div>
         </footer>
       </main>
