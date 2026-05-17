@@ -85,7 +85,7 @@ export default function HomePage({ onNavigate, onSelectFundi, onFilterChange }: 
               Verified construction hiring in Kenya
             </span>
             <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
-              Hire reliable fundis with proof, pricing, and escrow in one place.
+              Connect with trusted fundis for every stage of your construction project.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
               Fundilink helps homeowners and contractors find available Kenyan tradespeople, compare verified profiles, and manage job applications without informal back-and-forth.
@@ -174,7 +174,7 @@ export default function HomePage({ onNavigate, onSelectFundi, onFilterChange }: 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-widest text-[#005fec]">Trade coverage</p>
-            <h2 className="text-2xl font-black tracking-tight text-slate-950">Browse by actual listed skills</h2>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950">Explore available trades from verified fundi profiles</h2>
           </div>
           <button onClick={() => onNavigate('jobs')} className="inline-flex items-center gap-2 text-sm font-black text-[#005fec]">
             View open jobs
@@ -211,7 +211,7 @@ export default function HomePage({ onNavigate, onSelectFundi, onFilterChange }: 
             <p className="text-[11px] font-black uppercase tracking-widest text-[#005fec]">How it works</p>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">A cleaner hiring flow for both sides.</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Employers create structured briefs. Fundis apply with profile evidence, CV details, portfolio images, and clear availability. The app keeps status, messaging, and escrow steps visible.
+              Employers create structured jobs. Fundis apply with profile evidence, CV details, portfolio images, and clear availability. The app keeps status, messaging, and M-Pesa steps visible.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">

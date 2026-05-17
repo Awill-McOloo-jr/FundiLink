@@ -10,6 +10,25 @@ export type ApplicationStatus = 'pending' | 'reviewed' | 'interviewed' | 'offere
 export type PaymentStatus = 'pending' | 'escrowed' | 'released' | 'refunded' | 'failed';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
+export const JOB_CATEGORIES = [
+  'All Categories',
+  'Electrical Works',
+  'Building Construction',
+  'Solar Installation',
+  'Borehole Drilling',
+  'Plumbing & Drainage',
+  'Carpentry & Joinery',
+  'Painting & Finishing',
+  'Roofing',
+  'Tiling & Flooring',
+  'Welding & Fabrication',
+  'HVAC & Refrigeration',
+  'Security & CCTV',
+  'Landscaping',
+] as const;
+
+export type JobCategory = Exclude<(typeof JOB_CATEGORIES)[number], 'All Categories'>;
+
 // ── TABLE: users ────────────────────────────────────────────────────────────
 // Indexes: byEmail (unique), byRole, byPhone
 export interface User {
@@ -37,6 +56,10 @@ export interface Profile {
   county: string;          // indexed
   hourlyRate: number;      // KSh
   avatarUrl: string;
+  cvFileName?: string;
+  cvInsights?: string[];
+  verificationDocuments?: string[];
+  verificationStatus?: 'unverified' | 'pending' | 'verified';
   portfolioImages: string[];
   rating: number;          // 0.0–5.0, indexed
   completedJobs: number;
@@ -54,6 +77,7 @@ export interface Job {
   employerId: string;      // FK → users._id
   employerName: string;    // denormalized for display
   title: string;
+  category?: JobCategory;
   description: string;
   skills: string[];        // indexed (array index)
   county: string;          // indexed
@@ -146,20 +170,26 @@ export const SEED_USERS: User[] = [
 ];
 
 export const SEED_PROFILES: Profile[] = [
-  { _id: 'p_1', userId: 'u_fundi_1', bio: 'Professional mason with 8+ years experience in foundation laying, bricklaying, and plastering for residential bungalows across Nairobi and Kiambu. NCA-certified.', skills: ['Masonry', 'Concrete Mixing', 'Tile Fitting', 'Foundation Repair'], county: 'Nairobi', hourlyRate: 450, avatarUrl: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150&auto=format&fit=crop&q=80', portfolioImages: ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=400&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=400&auto=format&fit=crop&q=80'], rating: 4.9, completedJobs: 34, verified: true, availability: 'available', createdAt: now - 90*day, updatedAt: now - 2*day },
-  { _id: 'p_2', userId: 'u_fundi_2', bio: 'Certified plumber expert in drainage unblocking, water meter installation, and modern PEX piping. Fast response time around Mombasa and coastal areas.', skills: ['Plumbing', 'Drainage', 'Pipe Fitting', 'Water Heater Repair'], county: 'Mombasa', hourlyRate: 400, avatarUrl: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150&auto=format&fit=crop&q=80', portfolioImages: ['https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&auto=format&fit=crop&q=80'], rating: 4.7, completedJobs: 21, verified: true, availability: 'available', createdAt: now - 60*day, updatedAt: now - 5*day },
-  { _id: 'p_3', userId: 'u_fundi_3', bio: 'EPRA-certified domestic electrician specializing in smart home wiring, solar panel installation, distribution board setup, and safety auditing across Kisumu and western Kenya.', skills: ['Electrical Wiring', 'Solar Installation', 'Fault Finding', 'Generator Setup'], county: 'Kisumu', hourlyRate: 500, avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', portfolioImages: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&auto=format&fit=crop&q=80'], rating: 4.8, completedJobs: 19, verified: true, availability: 'busy', createdAt: now - 45*day, updatedAt: now - 1*day },
-  { _id: 'p_4', userId: 'u_fundi_4', bio: 'Custom furniture craftsman and roof framework carpenter. Bespoke designs for wardrobes, kitchen cabinets, and sturdy roofing rafters. Based in Kiambu with county-wide service.', skills: ['Carpentry', 'Roofing', 'Cabinet Making', 'Wood Varnishing'], county: 'Kiambu', hourlyRate: 420, avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80', portfolioImages: ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&auto=format&fit=crop&q=80'], rating: 5.0, completedJobs: 12, verified: false, availability: 'available', createdAt: now - 30*day, updatedAt: now - 3*day },
-  { _id: 'p_5', userId: 'u_fundi_5', bio: 'Professional painter and gypsum ceiling artist. Specializing in interior/exterior finishing, decorative textures, and modern gypsum board designs for commercial and residential spaces.', skills: ['Painting', 'Gypsum Ceiling', 'Wall Texturing', 'Waterproofing'], county: 'Nakuru', hourlyRate: 380, avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', portfolioImages: [], rating: 4.6, completedJobs: 8, verified: false, availability: 'available', createdAt: now - 20*day, updatedAt: now - 1*day },
+  { _id: 'p_1', userId: 'u_fundi_1', bio: 'Professional mason with 8+ years experience in foundation laying, bricklaying, and plastering for residential bungalows across Nairobi and Kiambu. NCA-certified.', skills: ['Masonry', 'Concrete Mixing', 'Tile Fitting', 'Foundation Repair'], county: 'Nairobi', hourlyRate: 450, avatarUrl: 'https://source.unsplash.com/160x160/?african,construction,worker,portrait,man', portfolioImages: ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=400&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=400&auto=format&fit=crop&q=80'], rating: 4.9, completedJobs: 34, verified: true, availability: 'available', createdAt: now - 90*day, updatedAt: now - 2*day },
+  { _id: 'p_2', userId: 'u_fundi_2', bio: 'Certified plumber expert in drainage unblocking, water meter installation, and modern PEX piping. Fast response time around Mombasa and coastal areas.', skills: ['Plumbing', 'Drainage', 'Pipe Fitting', 'Water Heater Repair'], county: 'Mombasa', hourlyRate: 400, avatarUrl: 'https://source.unsplash.com/160x160/?african,plumber,portrait,man', portfolioImages: ['https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&auto=format&fit=crop&q=80'], rating: 4.7, completedJobs: 21, verified: true, availability: 'available', createdAt: now - 60*day, updatedAt: now - 5*day },
+  { _id: 'p_3', userId: 'u_fundi_3', bio: 'EPRA-certified domestic electrician specializing in smart home wiring, solar panel installation, distribution board setup, and safety auditing across Kisumu and western Kenya.', skills: ['Electrical Wiring', 'Solar Installation', 'Fault Finding', 'Generator Setup'], county: 'Kisumu', hourlyRate: 500, avatarUrl: 'https://source.unsplash.com/160x160/?african,woman,electrician,portrait', portfolioImages: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&auto=format&fit=crop&q=80'], rating: 4.8, completedJobs: 19, verified: true, availability: 'busy', createdAt: now - 45*day, updatedAt: now - 1*day },
+  { _id: 'p_4', userId: 'u_fundi_4', bio: 'Custom furniture craftsman and roof framework carpenter. Bespoke designs for wardrobes, kitchen cabinets, and sturdy roofing rafters. Based in Kiambu with county-wide service.', skills: ['Carpentry', 'Roofing', 'Cabinet Making', 'Wood Varnishing'], county: 'Kiambu', hourlyRate: 420, avatarUrl: 'https://source.unsplash.com/160x160/?african,carpenter,portrait,woman', portfolioImages: ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&auto=format&fit=crop&q=80'], rating: 5.0, completedJobs: 12, verified: false, availability: 'available', createdAt: now - 30*day, updatedAt: now - 3*day },
+  { _id: 'p_5', userId: 'u_fundi_5', bio: 'Professional painter and gypsum ceiling artist. Specializing in interior/exterior finishing, decorative textures, and modern gypsum board designs for commercial and residential spaces.', skills: ['Painting', 'Gypsum Ceiling', 'Wall Texturing', 'Waterproofing'], county: 'Nakuru', hourlyRate: 380, avatarUrl: 'https://source.unsplash.com/160x160/?african,painter,portrait,man', portfolioImages: [], rating: 4.6, completedJobs: 8, verified: false, availability: 'available', createdAt: now - 20*day, updatedAt: now - 1*day },
 ];
 
 export const SEED_JOBS: Job[] = [
-  { _id: 'job_1', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Kitchen Cabinet Refitting & Living Room Tile Laying', description: 'We need an experienced craftsman to replace outdated wooden kitchen cabinets and lay high-gloss floor tiles in a Kilimani apartment. Materials are already purchased and on site. Work must be completed within 4 days. Must bring own precision tools and spirit level.', skills: ['Tile Fitting', 'Carpentry', 'Cabinet Making'], county: 'Nairobi', budget: 25000, status: 'active', deadline: '2026-04-15', applicationsCount: 2, createdAt: now - 5*day, updatedAt: now - 1*day },
-  { _id: 'job_2', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Complete Borehole Pump Solar Integration', description: 'Looking for a certified solar tech/electrician to connect our deep well water pump to a newly installed 12-panel solar array. Must test the inverter flow control and provide safety grounding. EPRA certification required.', skills: ['Electrical Wiring', 'Solar Installation'], county: 'Kiambu', budget: 45000, status: 'active', deadline: '2026-04-20', applicationsCount: 1, createdAt: now - 3*day, updatedAt: now - 1*day },
-  { _id: 'job_3', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Perimeter Wall Construction (Block Work)', description: 'Setting up a perimeter fence around a quarter-acre plot in Nakuru. Need a reliable team leader mason who can lay machine-cut stones quickly with proper alignment and mortar ratio. Daily lunch provided. 2-week project.', skills: ['Masonry', 'Concrete Mixing'], county: 'Nakuru', budget: 60000, status: 'active', deadline: '2026-04-25', applicationsCount: 0, createdAt: now - 2*day, updatedAt: now - 2*day },
-  { _id: 'job_4', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Bathroom Leakage Troubleshooting & Pipe Replacement', description: 'Ceiling of ground floor is wet due to active leak from master bathroom above. Need a skilled plumber with sound detector experience to isolate the broken PPR pipe and replace it without smashing too many tiles.', skills: ['Plumbing', 'Drainage'], county: 'Mombasa', budget: 12000, status: 'active', deadline: '2026-04-12', applicationsCount: 1, createdAt: now - 1*day, updatedAt: now - 1*day },
-  { _id: 'job_5', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Full House Interior Painting & Gypsum Ceiling', description: 'Moving into a new 3-bedroom apartment in Westlands. Need complete interior painting with premium silk finish plus gypsum ceiling installation in living room and master bedroom. Must have dust sheets and clean workspace.', skills: ['Painting', 'Gypsum Ceiling'], county: 'Nairobi', budget: 35000, status: 'active', deadline: '2026-04-30', applicationsCount: 0, createdAt: now - 1*day, updatedAt: now - 1*day },
-  { _id: 'job_6', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Roof Truss Framework for Extension Wing', description: 'Building a 2-room extension in Machakos. Need an experienced carpenter to construct and install roof trusses using treated cypress timber. Must follow approved architectural drawings.', skills: ['Carpentry', 'Roofing'], county: 'Machakos', budget: 28000, status: 'active', deadline: '2026-05-05', applicationsCount: 0, createdAt: now, updatedAt: now },
+  { _id: 'job_1', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Kitchen Cabinet Refitting & Living Room Tile Laying', category: 'Tiling & Flooring', description: 'We need an experienced craftsman to replace outdated wooden kitchen cabinets and lay high-gloss floor tiles in a Kilimani apartment. Materials are already purchased and on site. Work must be completed within 4 days. Must bring own precision tools and spirit level.', skills: ['Tile Fitting', 'Carpentry', 'Cabinet Making'], county: 'Nairobi', budget: 25000, status: 'active', deadline: '2026-04-15', applicationsCount: 2, createdAt: now - 5*day, updatedAt: now - 1*day },
+  { _id: 'job_2', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Complete Borehole Pump Solar Integration', category: 'Solar Installation', description: 'Looking for a certified solar tech/electrician to connect our deep well water pump to a newly installed 12-panel solar array. Must test the inverter flow control and provide safety grounding. EPRA certification required.', skills: ['Electrical Wiring', 'Solar Installation'], county: 'Kiambu', budget: 45000, status: 'active', deadline: '2026-04-20', applicationsCount: 1, createdAt: now - 3*day, updatedAt: now - 1*day },
+  { _id: 'job_3', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Perimeter Wall Construction (Block Work)', category: 'Building Construction', description: 'Setting up a perimeter fence around a quarter-acre plot in Nakuru. Need a reliable team leader mason who can lay machine-cut stones quickly with proper alignment and mortar ratio. Daily lunch provided. 2-week project.', skills: ['Masonry', 'Concrete Mixing'], county: 'Nakuru', budget: 60000, status: 'active', deadline: '2026-04-25', applicationsCount: 0, createdAt: now - 2*day, updatedAt: now - 2*day },
+  { _id: 'job_4', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Bathroom Leakage Troubleshooting & Pipe Replacement', category: 'Plumbing & Drainage', description: 'Ceiling of ground floor is wet due to active leak from master bathroom above. Need a skilled plumber with sound detector experience to isolate the broken PPR pipe and replace it without smashing too many tiles.', skills: ['Plumbing', 'Drainage'], county: 'Mombasa', budget: 12000, status: 'active', deadline: '2026-04-12', applicationsCount: 1, createdAt: now - 1*day, updatedAt: now - 1*day },
+  { _id: 'job_5', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Full House Interior Painting & Gypsum Ceiling', category: 'Painting & Finishing', description: 'Moving into a new 3-bedroom apartment in Westlands. Need complete interior painting with premium silk finish plus gypsum ceiling installation in living room and master bedroom. Must have dust sheets and clean workspace.', skills: ['Painting', 'Gypsum Ceiling'], county: 'Nairobi', budget: 35000, status: 'active', deadline: '2026-04-30', applicationsCount: 0, createdAt: now - 1*day, updatedAt: now - 1*day },
+  { _id: 'job_6', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Roof Truss Framework for Extension Wing', category: 'Roofing', description: 'Building a 2-room extension in Machakos. Need an experienced carpenter to construct and install roof trusses using treated cypress timber. Must follow approved architectural drawings.', skills: ['Carpentry', 'Roofing'], county: 'Machakos', budget: 28000, status: 'active', deadline: '2026-05-05', applicationsCount: 0, createdAt: now, updatedAt: now },
+  { _id: 'job_7', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Borehole Drilling Survey and Pump House Setup', category: 'Borehole Drilling', description: 'Need a borehole team to inspect a plot near Eldoret, advise on drilling depth, prepare casing requirements, and build a small pump house after drilling. Please include equipment availability and expected mobilisation timeline.', skills: ['Borehole Drilling', 'Concrete Mixing', 'Electrical Wiring'], county: 'Eldoret', budget: 85000, status: 'active', deadline: '2026-05-16', applicationsCount: 0, createdAt: now - 2*day, updatedAt: now - 2*day },
+  { _id: 'job_8', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Apartment CCTV and Smart Lock Installation', category: 'Security & CCTV', description: 'Install 8 CCTV cameras, configure remote viewing, and fit two smart locks for a small apartment block in Kiambu. Contractor must label cables neatly and provide a handover guide for the caretaker.', skills: ['CCTV Installation', 'Electrical Wiring', 'Fault Finding'], county: 'Kiambu', budget: 38000, status: 'active', deadline: '2026-05-12', applicationsCount: 0, createdAt: now - 1*day, updatedAt: now - 1*day },
+  { _id: 'job_9', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Steel Gate Welding and Anti-Rust Finishing', category: 'Welding & Fabrication', description: 'Fabricate and install a sliding steel gate for a residential driveway in Kajiado. Include anti-rust primer, hinges, locking provision, and clean site handover.', skills: ['Welding', 'Metal Fabrication', 'Painting'], county: 'Kajiado', budget: 52000, status: 'active', deadline: '2026-05-18', applicationsCount: 0, createdAt: now - 1*day, updatedAt: now - 1*day },
+  { _id: 'job_10', employerId: 'u_emp_2', employerName: 'David Kiprop', title: 'Cold Room AC Service for Butchery', category: 'HVAC & Refrigeration', description: 'Service a small cold room and repair inconsistent cooling in a butchery. Technician should check refrigerant levels, clean coils, inspect thermostat wiring, and advise on preventive maintenance.', skills: ['HVAC Service', 'Fault Finding', 'Electrical Wiring'], county: 'Nakuru', budget: 18000, status: 'active', deadline: '2026-05-09', applicationsCount: 0, createdAt: now, updatedAt: now },
+  { _id: 'job_11', employerId: 'u_emp_3', employerName: 'Wanjiku Maina', title: 'Cabro Driveway and Drainage Channel', category: 'Landscaping', description: 'Prepare a driveway base, lay cabro blocks, and shape a side drainage channel for a home in Nairobi. Must quote labour, tools, compaction, and estimated completion date.', skills: ['Cabro Laying', 'Drainage', 'Concrete Mixing'], county: 'Nairobi', budget: 42000, status: 'active', deadline: '2026-05-21', applicationsCount: 0, createdAt: now, updatedAt: now },
+  { _id: 'job_12', employerId: 'u_emp_1', employerName: 'Fatma Juma', title: 'Three-Phase Consumer Unit Upgrade', category: 'Electrical Works', description: 'Upgrade a consumer unit for a workshop, balance loads, label circuits, and test earthing. Fundi must bring testing equipment and explain any safety defects before work starts.', skills: ['Electrical Wiring', 'Fault Finding'], county: 'Nairobi', budget: 30000, status: 'active', deadline: '2026-05-14', applicationsCount: 0, createdAt: now, updatedAt: now },
 ];
 
 export const SEED_APPLICATIONS: Application[] = [
@@ -188,7 +218,25 @@ export const SEED_PAYMENTS: Payment[] = [
 
 export const COUNTIES = ['All Counties', 'Nairobi', 'Mombasa', 'Kiambu', 'Kisumu', 'Nakuru', 'Eldoret', 'Machakos', 'Kajiado'];
 
-export const SKILL_OPTIONS = ['All Skills', 'Masonry', 'Plumbing', 'Electrical Wiring', 'Carpentry', 'Tile Fitting', 'Concrete Mixing', 'Solar Installation', 'Cabinet Making', 'Drainage', 'Roofing', 'Painting', 'Gypsum Ceiling', 'Fault Finding', 'Pipe Fitting'];
+export const SKILL_OPTIONS = ['All Skills', 'Masonry', 'Plumbing', 'Electrical Wiring', 'Carpentry', 'Tile Fitting', 'Concrete Mixing', 'Solar Installation', 'Cabinet Making', 'Drainage', 'Roofing', 'Painting', 'Gypsum Ceiling', 'Fault Finding', 'Pipe Fitting', 'Borehole Drilling', 'CCTV Installation', 'Welding', 'Metal Fabrication', 'HVAC Service', 'Cabro Laying'];
+
+export function getJobCategory(job: Pick<Job, 'category' | 'skills' | 'title' | 'description'>): JobCategory {
+  if (job.category) return job.category;
+  const text = `${job.title} ${job.description} ${job.skills.join(' ')}`.toLowerCase();
+  if (text.includes('solar')) return 'Solar Installation';
+  if (text.includes('borehole') || text.includes('pump house') || text.includes('drilling')) return 'Borehole Drilling';
+  if (text.includes('tile') || text.includes('floor') || text.includes('cabro')) return 'Tiling & Flooring';
+  if (text.includes('roof')) return 'Roofing';
+  if (text.includes('electrical') || text.includes('wiring') || text.includes('consumer unit') || text.includes('fault')) return 'Electrical Works';
+  if (text.includes('plumbing') || text.includes('drainage') || text.includes('pipe') || text.includes('leak')) return 'Plumbing & Drainage';
+  if (text.includes('welding') || text.includes('fabrication') || text.includes('steel') || text.includes('metal')) return 'Welding & Fabrication';
+  if (text.includes('hvac') || /\bac\b/.test(text) || text.includes('cooling') || text.includes('refrigeration')) return 'HVAC & Refrigeration';
+  if (text.includes('cctv') || text.includes('security') || text.includes('smart lock')) return 'Security & CCTV';
+  if (text.includes('landscap')) return 'Landscaping';
+  if (text.includes('carpentry') || text.includes('cabinet') || text.includes('joinery')) return 'Carpentry & Joinery';
+  if (text.includes('painting') || text.includes('gypsum') || text.includes('finish')) return 'Painting & Finishing';
+  return 'Building Construction';
+}
 
 export const CATEGORIES = [
   { name: 'Masonry & Concrete', count: 142, skills: ['Masonry', 'Concrete Mixing', 'Foundation Repair'] },

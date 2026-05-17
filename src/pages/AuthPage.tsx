@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import type { UserRole } from '../db/schema';
-import { Smartphone, Hammer, Briefcase, Shield, ArrowRight } from 'lucide-react';
+import { ArrowRight, Briefcase, Hammer, Shield, Smartphone } from 'lucide-react';
+import Logo from '../components/Logo';
 
 interface AuthPageProps {
   onNavigate: (page: string) => void;
   showToast: (msg: string) => void;
 }
 
-export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
-  const { login, signup, verifyOTP, authStep, currentUser } = useAuth();
+const authImages = [
+  'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1400&auto=format&fit=crop&q=85',
+  'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=1400&auto=format&fit=crop&q=85',
+  'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=1400&auto=format&fit=crop&q=85',
+  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1400&auto=format&fit=crop&q=85',
+  'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=1400&auto=format&fit=crop&q=85',
+];
 
+export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
+  const { login, signup, verifyOTP, authStep } = useAuth();
   const [mode, setMode] = useState<'login' | 'signup'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,183 +27,131 @@ export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
   const [role, setRole] = useState<UserRole>('fundi');
   const [otpInput, setOtpInput] = useState('');
   const [message, setMessage] = useState('');
+  const [heroImage] = useState(() => authImages[Math.floor(Math.random() * authImages.length)]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
 
-    if (mode === 'login') {
-      const result = login(email, password);
-      setMessage(result.message);
-      showToast(result.message);
-    } else {
-      if (!email || !password || !name) {
-        showToast('Please fill in all required fields.');
-        return;
-      }
-      const result = signup({ email, password, name, phone, role });
-      setMessage(result.message);
-      showToast(result.message);
-    }
+    const result = mode === 'login'
+      ? await login(email, password)
+      : await signup({ email, password, name, phone, role });
+
+    setMessage(result.message);
+    showToast(result.message);
   };
 
-  const handleVerifyOTP = (e: React.FormEvent) => {
+  const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = verifyOTP(otpInput);
+    const result = await verifyOTP(otpInput);
     if (result.success) {
-      showToast('🎉 Welcome to Fundilink!');
-      // Navigate based on role after short delay
-      setTimeout(() => {
-        if (currentUser?.role === 'fundi') onNavigate('dashboard-fundi');
-        else if (currentUser?.role === 'employer') onNavigate('dashboard-employer');
-        else if (currentUser?.role === 'admin') onNavigate('admin');
-        else onNavigate('home');
-      }, 300);
+      showToast('Welcome to Fundilink.');
+      setTimeout(() => onNavigate('home'), 300);
     } else {
       showToast(result.message);
     }
   };
 
-  // OTP verification step
-  if (authStep === 'otp_sent') {
-    return (
-      <div className="max-w-md mx-auto px-4 py-12">
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-md space-y-6 animate-slide-up">
-          <div className="text-center">
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-[#005fec] mb-3">
-              <Smartphone className="h-7 w-7" />
-            </div>
-            <h1 className="text-xl font-display font-black text-slate-900">Verify Your Identity</h1>
-            <p className="text-xs text-slate-500 mt-1">We sent a 6-digit code via SMS to your phone.</p>
-          </div>
-
-          {message && (
-            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs text-center font-medium">{message}</div>
-          )}
-
-          <form onSubmit={handleVerifyOTP} className="space-y-4">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <label className="block text-xs font-bold text-slate-700 mb-2">Enter 6-Digit OTP Code</label>
-              <input
-                type="text"
-                placeholder="123456"
-                maxLength={6}
-                value={otpInput}
-                onChange={(e) => setOtpInput(e.target.value)}
-                className="w-full text-center tracking-[0.5em] text-xl font-bold p-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-[10px] text-slate-400 mt-2 text-center">
-                Dev mode: The OTP code is shown in the blue toast notification.
-              </p>
-            </div>
-
-            <button type="submit" className="w-full bg-[#005fec] hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-xl transition shadow-sm flex items-center justify-center gap-2">
-              Verify & Continue <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
-
-          <p className="text-center text-[11px] text-slate-400">
-            Didn't receive it? <button onClick={() => { setMessage('New OTP sent!'); showToast('New OTP dispatched.'); }} className="text-[#005fec] underline font-medium">Resend Code</button>
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const roleOptions = [
+    { value: 'fundi' as UserRole, label: 'Fundi', icon: Hammer, desc: 'Find work' },
+    { value: 'employer' as UserRole, label: 'Employer', icon: Briefcase, desc: 'Hire talent' },
+    { value: 'admin' as UserRole, label: 'Admin', icon: Shield, desc: 'Moderate' },
+  ];
 
   return (
-    <div className="max-w-md mx-auto px-4 py-12">
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-md space-y-6 animate-slide-up">
-        <div className="text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-[#005fec] mb-3">
-            <Shield className="h-7 w-7" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-display font-black text-slate-900 tracking-tight">
-            {mode === 'login' ? 'Welcome Back' : 'Join Fundilink'}
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            {mode === 'login' ? 'Sign in with email & password.' : 'Create your account to start hiring or earning.'}
-          </p>
-        </div>
+    <div className="grid min-h-screen bg-white text-slate-950 lg:grid-cols-[minmax(320px,42vw)_1fr]">
+      <section className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:border-r lg:border-slate-200 lg:px-10">
+        <div className="w-full max-w-md">
+          <Logo tone="light" />
+          <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+            {authStep === 'otp_sent' ? (
+              <form onSubmit={handleVerifyOTP} className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-[#005fec]">
+                    <Smartphone className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black">Enter OTP</h2>
+                    <p className="text-xs text-slate-500">Use the dev code shown in the toast.</p>
+                  </div>
+                </div>
 
-        {/* Mode Toggle */}
-        <div className="flex bg-slate-100 rounded-xl p-1">
-          <button onClick={() => { setMode('signup'); setMessage(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${mode === 'signup' ? 'bg-white text-[#005fec] shadow-sm' : 'text-slate-500'}`}>
-            Create Account
-          </button>
-          <button onClick={() => { setMode('login'); setMessage(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${mode === 'login' ? 'bg-white text-[#005fec] shadow-sm' : 'text-slate-500'}`}>
-            Sign In
-          </button>
-        </div>
+                {message && <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-bold text-blue-800">{message}</div>}
 
-        {message && (
-          <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs text-center font-medium">{message}</div>
-        )}
+                <input
+                  type="text"
+                  placeholder="123456"
+                  maxLength={6}
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-2xl font-black tracking-[0.45em] outline-none focus:border-[#005fec]"
+                />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Select Your Role</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'fundi' as UserRole, label: 'Fundi', icon: Hammer, desc: 'Skilled Worker' },
-                  { value: 'employer' as UserRole, label: 'Employer', icon: Briefcase, desc: 'Homeowner' },
-                  { value: 'admin' as UserRole, label: 'Admin', icon: Shield, desc: 'Moderator' },
-                ].map(r => (
-                  <button key={r.value} type="button" onClick={() => setRole(r.value)}
-                    className={`p-3 rounded-xl border text-center transition flex flex-col items-center gap-1 ${role === r.value ? 'border-[#005fec] bg-blue-50/60 text-[#005fec] font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                    <r.icon className="h-4 w-4" />
-                    <span className="text-[11px] font-bold">{r.label}</span>
-                    <span className="text-[9px] text-slate-400">{r.desc}</span>
+                <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#005fec] py-3 text-sm font-black text-white transition hover:bg-blue-700">
+                  Verify and continue
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <h2 className="text-2xl font-black">{mode === 'login' ? 'Sign in' : 'Join Fundilink'}</h2>
+                  <p className="mt-1 text-xs text-slate-500">{mode === 'login' ? 'Access your Fundilink account.' : 'Create your Fundilink account.'}</p>
+                </div>
+
+                <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+                  <button type="button" onClick={() => setMode('signup')} className={`rounded-lg py-2 text-xs font-black transition ${mode === 'signup' ? 'bg-white text-[#005fec] shadow-sm' : 'text-slate-500'}`}>
+                    Create
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
+                  <button type="button" onClick={() => setMode('login')} className={`rounded-lg py-2 text-xs font-black transition ${mode === 'login' ? 'bg-white text-[#005fec] shadow-sm' : 'text-slate-500'}`}>
+                    Sign in
+                  </button>
+                </div>
 
-          {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-0.5">Full Name</label>
-              <input type="text" placeholder="e.g. John Kamau" value={name} onChange={(e) => setName(e.target.value)}
-                className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500" />
-            </div>
-          )}
+                {mode === 'signup' && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {roleOptions.map(option => {
+                        const Icon = option.icon;
+                        return (
+                          <button key={option.value} type="button" onClick={() => setRole(option.value)}
+                            className={`rounded-xl border p-3 text-center transition ${role === option.value ? 'border-[#005fec] bg-blue-50 text-[#005fec]' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+                            <Icon className="mx-auto h-4 w-4" />
+                            <span className="mt-1 block text-[11px] font-black">{option.label}</span>
+                            <span className="block text-[9px] text-slate-400">{option.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-[#005fec]" />
+                  </>
+                )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-0.5">Email Address</label>
-            <input type="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500" />
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-[#005fec]" />
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-[#005fec]" />
+
+                {mode === 'signup' && (
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-sm font-black text-slate-400">+254</span>
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0712345678" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 pl-14 text-sm outline-none focus:border-[#005fec]" />
+                  </div>
+                )}
+
+                {message && <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-bold text-blue-800">{message}</div>}
+
+                <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#005fec] py-3 text-sm font-black text-white transition hover:bg-blue-700">
+                  {mode === 'login' ? 'Sign in securely' : 'Create account'}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </form>
+            )}
           </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-0.5">Password</label>
-            <input type="password" required placeholder="Min 6 characters" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500" />
-          </div>
-
-          {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-0.5">Safaricom Number</label>
-              <div className="relative">
-                <input type="tel" placeholder="0712345678" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500 pl-14 font-mono" />
-                <span className="text-sm text-slate-400 absolute left-3 top-2.5 font-bold">+254</span>
-              </div>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">For M-Pesa escrow & OTP SMS.</span>
-            </div>
-          )}
-
-          <button type="submit" className="w-full bg-[#005fec] hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-xl transition shadow-sm uppercase tracking-wide">
-            {mode === 'login' ? 'Sign In Securely' : 'Create Account & Send OTP'}
-          </button>
-        </form>
-
-        <div className="pt-4 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-400">⚡ Quick test: Use the identity switcher bar at the top to skip auth.</p>
-          <p className="text-[10px] text-slate-400 mt-1">Test: <span className="font-mono">kamau.mason@gmail.com</span> / any password</p>
         </div>
-      </div>
+      </section>
+
+      <section className="relative hidden min-h-screen overflow-hidden bg-slate-950 lg:block">
+        <img src={heroImage} alt="Fundis at work" className="absolute inset-0 h-full w-full object-cover" />
+      </section>
     </div>
   );
 }

@@ -134,7 +134,7 @@ export function FundiDashboard({ jobs, applications, onNavigate, showToast, upda
                         app.status === 'hired' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
                         app.status === 'rejected' ? 'bg-red-100 text-red-800' :
                         'bg-amber-100 text-amber-800 border border-amber-300'}`}>
-                        {app.status === 'hired' ? '✓ Hired (Escrow)' : app.status}
+                        {app.status === 'hired' ? 'Hired' : app.status}
                       </span>
                     </div>
                     <div className="text-slate-600 text-[11px] bg-white p-2 rounded border border-slate-100">
@@ -219,7 +219,7 @@ export function EmployerDashboard({ jobs, setJobs, applications, setApplications
     setApplications(prev => prev.map(a => a._id === appId ? { ...a, status: 'hired' as const } : a));
     if (app) {
       const job = jobs.find(j => j._id === app.jobId);
-      showToast(`💚 M-Pesa Escrow: KSh ${job?.budget.toLocaleString()} locked for ${app.fundiName}`);
+      showToast(`M-Pesa payment reserved: KSh ${job?.budget.toLocaleString()} for ${app.fundiName}`);
     }
   };
 
@@ -234,11 +234,11 @@ export function EmployerDashboard({ jobs, setJobs, applications, setApplications
         <div>
           <span className="bg-white/20 text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded tracking-widest uppercase">Property Management</span>
           <h1 className="text-xl sm:text-2xl font-display font-black tracking-tight mt-1">Employer Suite: {currentUser.name}</h1>
-          <p className="text-xs text-blue-100">Post briefs, review artisans, manage M-Pesa escrow.</p>
+          <p className="text-xs text-blue-100">Post jobs, review artisans, manage M-Pesa payments.</p>
         </div>
         <div className="bg-white/10 px-4 py-3 rounded-xl text-center backdrop-blur-xs">
           <p className="text-[10px] text-blue-100 font-bold uppercase">Active</p>
-          <p className="text-xl font-bold text-amber-300">{myJobs.length} Briefs</p>
+          <p className="text-xl font-bold text-amber-300">{myJobs.length} Jobs</p>
         </div>
       </div>
 
@@ -246,7 +246,7 @@ export function EmployerDashboard({ jobs, setJobs, applications, setApplications
         {/* Post Job Form */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <h2 className="font-bold text-sm text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-            <PlusCircle className="h-4 w-4 text-[#005fec]" /> Post New Brief
+            <PlusCircle className="h-4 w-4 text-[#005fec]" /> Post New Job
           </h2>
           <form onSubmit={handleCreateJob} className="space-y-3">
             <div>
@@ -284,7 +284,7 @@ export function EmployerDashboard({ jobs, setJobs, applications, setApplications
                 className="w-full text-xs p-2 bg-slate-50 border rounded-lg focus:outline-none" />
             </div>
             <button type="submit" className="w-full bg-[#005fec] hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl transition">
-              🏗️ Broadcast Brief
+              Broadcast Job
             </button>
           </form>
         </div>
@@ -293,7 +293,7 @@ export function EmployerDashboard({ jobs, setJobs, applications, setApplications
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xs uppercase font-bold text-slate-400 tracking-wider">My Active Jobs & Bids</h2>
           {myJobs.length === 0 ? (
-            <p className="p-6 bg-white border rounded-xl text-xs text-slate-400 italic text-center">No active briefs. Post one using the form.</p>
+            <p className="p-6 bg-white border rounded-xl text-xs text-slate-400 italic text-center">No active jobs. Post one using the form.</p>
           ) : (
             myJobs.map(job => {
               const jobApps = applications.filter(a => a.jobId === job._id);
@@ -489,7 +489,7 @@ export function AdminDashboard({ jobs, setJobs, applications, payments, onNaviga
                 p.status === 'released' ? 'bg-emerald-100 text-emerald-800' :
                 p.status === 'refunded' ? 'bg-red-100 text-red-800' :
                 'bg-amber-100 text-amber-800'}`}>
-                {p.status}
+                {p.status === 'escrowed' ? 'reserved' : p.status}
               </span>
             </div>
           ))}

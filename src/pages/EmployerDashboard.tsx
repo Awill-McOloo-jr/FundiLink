@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { COUNTIES, SKILL_OPTIONS, formatKSh, generateId, type Application, type Job } from '../db/schema';
+import { COUNTIES, JOB_CATEGORIES, SKILL_OPTIONS, formatKSh, generateId, getJobCategory, type Application, type Job, type JobCategory } from '../db/schema';
 import {
   AlertTriangle,
   Banknote,
@@ -55,6 +55,7 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
   const [desc, setDesc] = useState('');
   const [county, setCounty] = useState('Nairobi');
   const [budget, setBudget] = useState('25000');
+  const [jobCategory, setJobCategory] = useState<JobCategory>('Building Construction');
   const [primarySkill, setPrimarySkill] = useState('Masonry');
   const [secondarySkill, setSecondarySkill] = useState('Concrete Mixing');
   const [deadline, setDeadline] = useState('2026-06-15');
@@ -111,7 +112,8 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
       _id: generateId('job'),
       employerId: currentUser._id,
       employerName: currentUser.name,
-      title: title.trim() || 'Untitled construction brief',
+      title: title.trim() || 'Untitled construction job',
+      category: jobCategory,
       description: `${metadata}\n\n${desc.trim() || 'Scope details pending.'}`,
       skills,
       county,
@@ -125,7 +127,7 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
     setJobs(prev => [newJob, ...prev]);
     setTitle('');
     setDesc('');
-    showToast('Job brief posted. Candidate recommendations updated.');
+    showToast('Job posted. Candidate recommendations updated.');
   };
 
   const updateApplicationStatus = (appId: string, status: Application['status']) => {
@@ -142,14 +144,14 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
               <BriefcaseBusiness className="h-3.5 w-3.5" />
               Employer hiring cockpit
             </span>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Manage briefs, candidates, interviews, and hiring outcomes.</h1>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Manage jobs, candidates, interviews, and hiring outcomes.</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Built for homeowners, contractors, and property managers who need a clean workflow from posting to shortlist to final offer.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Active briefs', value: myJobs.length, icon: ClipboardList },
+              { label: 'Active jobs', value: myJobs.length, icon: ClipboardList },
               { label: 'Applications', value: myApplications.length, icon: UsersRound },
               { label: 'Interviews', value: interviewApps, icon: Video },
               { label: 'Budget live', value: formatKSh(totalBudget), icon: Banknote },
@@ -172,12 +174,18 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
               <PlusCircle className="h-4 w-4 text-[#005fec]" />
-              Post a complete brief
+              Post a complete job
             </h2>
             <form onSubmit={handleCreateJob} className="mt-4 space-y-3">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 Job title
                 <input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800 outline-none focus:border-[#005fec]" placeholder="e.g. Roof truss installation" />
+              </label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Category
+                <select value={jobCategory} onChange={(e) => setJobCategory(e.target.value as JobCategory)} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800">
+                  {JOB_CATEGORIES.filter(category => category !== 'All Categories').map(category => <option key={category}>{category}</option>)}
+                </select>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -217,7 +225,7 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
               </label>
               <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#005fec] py-2.5 text-xs font-black text-white hover:bg-blue-700">
                 <Send className="h-3.5 w-3.5" />
-                Publish brief
+                Publish job
               </button>
             </form>
           </section>
@@ -301,11 +309,11 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
               <ClipboardList className="h-4 w-4 text-[#005fec]" />
-              Briefs and application workflow
+              Jobs and application workflow
             </h2>
             <div className="mt-4 space-y-4">
               {myJobs.length === 0 ? (
-                <div className="rounded-lg bg-slate-50 p-8 text-center text-sm text-slate-500">No briefs yet. Publish one from the left panel.</div>
+                <div className="rounded-lg bg-slate-50 p-8 text-center text-sm text-slate-500">No jobs yet. Publish one from the left panel.</div>
               ) : myJobs.map(job => {
                 const jobApps = applications.filter(app => app.jobId === job._id);
                 return (
@@ -315,6 +323,7 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
                         <h3 className="font-black text-slate-950">{job.title}</h3>
                         <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                           <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {job.county}</span>
+                          <span>{getJobCategory(job)}</span>
                           <span>{formatKSh(job.budget)}</span>
                           <span>{getWorkMode(job)}</span>
                           <span>{getCompanyType(job)}</span>
@@ -364,7 +373,7 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
                               Reject
                             </button>
                             <button onClick={() => updateApplicationStatus(app._id, 'hired')} className="rounded-md bg-slate-950 px-3 py-1.5 text-[11px] font-black text-white">
-                              Hire and escrow
+                              Hire with M-Pesa
                             </button>
                           </div>
                         </div>

@@ -102,7 +102,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
   const [techStack, setTechStack] = useState('All Skills');
   const [workArrangement, setWorkArrangement] = useState('Any');
   const [companyType, setCompanyType] = useState('Any');
-  const [savedSearches, setSavedSearches] = useState<string[]>(['Nearby high-match briefs', 'Verified employers over KSh 25k']);
+  const [savedSearches, setSavedSearches] = useState<string[]>(['Nearby high-match jobs', 'Verified employers over KSh 25k']);
   const [photoPreview, setPhotoPreview] = useState(myProfile?.avatarUrl || '');
   const [cvFileName, setCvFileName] = useState('');
   const [cvInsights, setCvInsights] = useState<string[]>([]);
@@ -171,13 +171,42 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
 
   const openSkillMatches = jobs.filter(job => job.status === 'active' && job.skills.some(skill => profileSkills.includes(skill))).length;
   const topMatch = matchedJobs[0];
+  const cvInsightList = myProfile?.cvInsights?.length ? myProfile.cvInsights : cvInsights;
+  const verificationDocuments = myProfile?.verificationDocuments || [];
   const readinessItems = [
     { label: 'Profile photo', done: Boolean(myProfile?.avatarUrl), detail: 'Helps employers identify you quickly.' },
-    { label: 'CV insights', done: cvInsights.length > 0, detail: cvInsights.length > 0 ? 'CV has been scanned this session.' : 'Upload CV to extract skills and certifications.' },
+    { label: 'CV insights', done: cvInsightList.length > 0, detail: cvInsightList.length > 0 ? `${myProfile?.cvFileName || 'CV'} scanned for matching.` : 'Upload CV to extract skills and certifications.' },
     { label: 'Portfolio evidence', done: Boolean(myProfile?.portfolioImages.length), detail: `${myProfile?.portfolioImages.length || 0} portfolio item(s).` },
-    { label: 'Verification', done: Boolean(myProfile?.verified), detail: myProfile?.verified ? 'Verified profile.' : 'Add NCA/EPRA or safety proof.' },
+    { label: 'Verification', done: Boolean(myProfile?.verified), detail: myProfile?.verified ? 'Verified profile.' : `${verificationDocuments.length} evidence file(s) uploaded.` },
   ];
   const readinessScore = Math.round((readinessItems.filter(item => item.done).length / readinessItems.length) * 100);
+  const latestApplication = [...myApps].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const latestApplicationJob = latestApplication ? jobs.find(job => job._id === latestApplication.jobId) : undefined;
+  const statusMessage = latestApplication
+    ? latestApplication.status === 'pending'
+      ? `Application sent to ${latestApplicationJob?.employerName || 'the employer'} for ${latestApplicationJob?.title || 'a job'}.`
+      : latestApplication.status === 'reviewed'
+        ? `${latestApplicationJob?.employerName || 'Employer'} has reviewed your application.`
+        : latestApplication.status === 'interviewed'
+          ? `Interview invitation received for ${latestApplicationJob?.title || 'your application'}.`
+          : latestApplication.status === 'offered'
+            ? `Offer received for ${latestApplicationJob?.title || 'your application'}.`
+            : latestApplication.status === 'hired'
+              ? `You were hired for ${latestApplicationJob?.title || 'the job'}.`
+              : latestApplication.status === 'rejected'
+                ? `${latestApplicationJob?.employerName || 'Employer'} selected another fundi for ${latestApplicationJob?.title || 'that job'}.`
+                : `Application status updated to ${latestApplication.status}.`
+    : 'No applications sent yet. Apply to a matching job to start receiving live updates.';
+  const replyCount = myApps.filter(app => app.status !== 'pending').length;
+  const notificationItems = [
+    statusMessage,
+    replyCount > 0
+      ? `${replyCount} application reply signal(s) received from employers.`
+      : 'No employer replies yet. Your dashboard will update when a status changes.',
+    readinessScore < 100
+      ? `Profile is ${readinessScore}% complete. Finish ${readinessItems.filter(item => !item.done).map(item => item.label.toLowerCase()).join(', ')} in the profile tab.`
+      : 'Profile is complete and ready for employer review.',
+  ];
 
   if (!currentUser || currentUser.role !== 'fundi') {
     return (
@@ -325,156 +354,59 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-        <aside className="space-y-4">
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <User className="h-4 w-4 text-[#005fec]" />
-              Fundi profile
-            </h2>
-            <form onSubmit={handleSaveProfile} className="mt-4 space-y-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={photoPreview || myProfile?.avatarUrl}
-                    alt={currentUser.name}
-                    className="h-16 w-16 rounded-lg object-cover ring-2 ring-white"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-black text-slate-900">Profile picture</p>
-                    <p className="text-[11px] leading-4 text-slate-500">Used on search cards, applications, and employer shortlist views.</p>
-                  </div>
-                </div>
-                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-slate-800 ring-1 ring-slate-200 hover:bg-blue-50">
-                  <Camera className="h-3.5 w-3.5 text-[#005fec]" />
-                  Upload photo
-                  <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e.target.files?.[0])} className="hidden" />
-                </label>
-              </div>
-
-              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-                <div className="flex items-start gap-2">
-                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#005fec]" />
-                  <div>
-                    <p className="text-xs font-black text-slate-900">CV reader</p>
-                    <p className="text-[11px] leading-4 text-slate-600">Upload a CV and Fundilink extracts useful matching details for employers.</p>
-                  </div>
-                </div>
-                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-slate-800 ring-1 ring-blue-100 hover:bg-blue-50">
-                  <UploadCloud className="h-3.5 w-3.5 text-[#005fec]" />
-                  Upload CV
-                  <input type="file" accept=".txt,.pdf,.doc,.docx" onChange={(e) => handleCvUpload(e.target.files?.[0])} className="hidden" />
-                </label>
-                {cvFileName && <p className="mt-2 truncate text-[10px] font-bold text-blue-700">{cvFileName}</p>}
-                {cvInsights.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {cvInsights.map(insight => (
-                      <p key={insight} className="rounded-md bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-700">
-                        {insight}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Bio
-                <textarea rows={4} value={editBio} onChange={(e) => setEditBio(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case leading-5 tracking-normal text-slate-800 outline-none focus:border-[#005fec]" />
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Rate
-                  <input type="number" value={editRate} onChange={(e) => setEditRate(Number(e.target.value))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800 outline-none focus:border-[#005fec]" />
-                </label>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  County
-                  <select value={editCounty} onChange={(e) => setEditCounty(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800 outline-none focus:border-[#005fec]">
-                    {COUNTIES.filter(c => c !== 'All Counties').map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </label>
-              </div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Skill stack
-                <input type="text" value={editSkills} onChange={(e) => setEditSkills(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800 outline-none focus:border-[#005fec]" />
-              </label>
-              <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#005fec] py-2.5 text-xs font-black text-white transition hover:bg-blue-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Save profile
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
+            <SlidersHorizontal className="h-4 w-4 text-[#005fec]" />
+            Job matching filters
+          </h2>
+          <button onClick={handleSaveSearch} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-50">
+            <BookmarkPlus className="h-3.5 w-3.5 text-[#005fec]" />
+            Save preset
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Location
+            <select value={filterCounty} onChange={(e) => setFilterCounty(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800">
+              {COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Radius
+            <input type="range" min="10" max="250" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="mt-3 w-full" />
+            <span className="text-xs normal-case text-slate-700">{radius} km</span>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Min pay
+            <input type="number" value={minBudget} onChange={(e) => setMinBudget(Number(e.target.value))}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800" />
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Max pay
+            <input type="number" value={maxBudget} onChange={(e) => setMaxBudget(Number(e.target.value))}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800" />
+          </label>
+          <select value={techStack} onChange={(e) => setTechStack(e.target.value)} className="self-end rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+            {SKILL_OPTIONS.map(skill => <option key={skill}>{skill}</option>)}
+          </select>
+          <select value={workArrangement} onChange={(e) => setWorkArrangement(e.target.value)} className="self-end rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+            {['Any', 'Onsite', 'Hybrid', 'Remote'].map(mode => <option key={mode}>{mode}</option>)}
+          </select>
+        </div>
+        {savedSearches.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {savedSearches.map(search => (
+              <button key={search} onClick={() => showToast(`Loaded preset: ${search}`)} className="rounded-md bg-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-blue-50">
+                {search}
               </button>
-              <button type="button" onClick={() => onNavigate('fundi-profile')}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-200">
-                <Eye className="h-3.5 w-3.5" />
-                View public profile
-              </button>
-            </form>
-          </section>
+            ))}
+          </div>
+        )}
+      </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <SlidersHorizontal className="h-4 w-4 text-[#005fec]" />
-              Smart filters
-            </h2>
-            <div className="mt-4 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Location
-                  <select value={filterCounty} onChange={(e) => setFilterCounty(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case tracking-normal text-slate-800">
-                    {COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </label>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Radius
-                  <input type="range" min="10" max="250" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="mt-3 w-full" />
-                  <span className="text-xs normal-case text-slate-700">{radius} km</span>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Min pay
-                  <input type="number" value={minBudget} onChange={(e) => setMinBudget(Number(e.target.value))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800" />
-                </label>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Max pay
-                  <input type="number" value={maxBudget} onChange={(e) => setMaxBudget(Number(e.target.value))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs normal-case text-slate-800" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-                  {['Any', 'Junior', 'Mid', 'Senior'].map(level => <option key={level}>{level}</option>)}
-                </select>
-                <select value={techStack} onChange={(e) => setTechStack(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-                  {SKILL_OPTIONS.map(skill => <option key={skill}>{skill}</option>)}
-                </select>
-                <select value={workArrangement} onChange={(e) => setWorkArrangement(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-                  {['Any', 'Onsite', 'Hybrid', 'Remote'].map(mode => <option key={mode}>{mode}</option>)}
-                </select>
-                <select value={companyType} onChange={(e) => setCompanyType(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-                  {['Any', 'Homeowner', 'Contractor', 'Estate'].map(type => <option key={type}>{type}</option>)}
-                </select>
-              </div>
-              <button onClick={handleSaveSearch} className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-xs font-black text-slate-800 hover:bg-slate-50">
-                <BookmarkPlus className="h-3.5 w-3.5 text-[#005fec]" />
-                Save search preset
-              </button>
-              <div className="space-y-1">
-                {savedSearches.map(search => (
-                  <button key={search} onClick={() => showToast(`Loaded preset: ${search}`)} className="block w-full truncate rounded-md bg-slate-100 px-2 py-1.5 text-left text-[11px] font-bold text-slate-600 hover:bg-blue-50">
-                    {search}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        </aside>
-
-        <main className="space-y-6">
+      <main className="space-y-6">
           <section className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -508,6 +440,12 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                       <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-blue-600" /> {workMode}</span>
                       <button onClick={() => handleRecommendAction(job)} className="rounded-md bg-slate-900 px-3 py-1.5 font-black text-white">Apply</button>
                     </div>
+                    <div className="mt-3 overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-2 rounded-full bg-[#005fec] transition-all" style={{ width: `${score}%` }} />
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      Skill fit: {matchedSkills.length}/{job.skills.length} exact, {adjacentSkills.length} adjacent. Score also includes distance, pay range, experience, and employer outcome signals.
+                    </p>
                   </div>
                 ))}
               </div>
@@ -597,7 +535,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                           {app.status === 'reviewed' && 'Notification: employer is reviewing your profile.'}
                           {app.status === 'interviewed' && 'Notification: you are invited to interview.'}
                           {app.status === 'offered' && 'Notification: job offer received.'}
-                          {app.status === 'hired' && 'Notification: hired. Escrow can be prepared.'}
+                          {app.status === 'hired' && 'Notification: hired. M-Pesa payment can be prepared.'}
                           {app.status === 'rejected' && 'Notification: application was not selected.'}
                         </span>
                       </div>
@@ -611,14 +549,14 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
                   <ClipboardCheck className="h-4 w-4 text-[#005fec]" />
-                  Assessments and portfolio
+                  Verification and portfolio
                 </h2>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {[
-                    { title: 'Tile level challenge', meta: '92% pass likelihood', icon: ClipboardCheck },
-                    { title: 'Safety compliance', meta: myProfile?.verified ? 'Verified' : 'Needs upload', icon: Shield },
+                    { title: 'Skill evidence', meta: `${profileSkills.length} live skill(s) listed`, icon: ClipboardCheck },
+                    { title: 'Verification badge', meta: myProfile?.verified ? 'Active on profile cards' : `${verificationDocuments.length} evidence file(s) uploaded`, icon: Shield },
                     { title: 'Portfolio showcase', meta: `${myProfile?.portfolioImages.length || 0} projects`, icon: FolderKanban },
-                    { title: 'Referral incentive', meta: 'KSh 1,500 per hire', icon: Star },
+                    { title: 'CV intelligence', meta: cvInsightList.length ? `${cvInsightList.length} extracted insight(s)` : 'No CV scanned yet', icon: FileText },
                   ].map(item => {
                     const Icon = item.icon;
                     return (
@@ -630,6 +568,10 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                     );
                   })}
                 </div>
+                <button onClick={() => onNavigate('profile')} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-black text-white transition hover:bg-slate-800">
+                  <Shield className="h-3.5 w-3.5" />
+                  Open verification center
+                </button>
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -638,9 +580,13 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
                   Notifications and reviews
                 </h2>
                 <div className="mt-4 space-y-2 text-xs">
-                  <p className="rounded-lg bg-blue-50 p-3 text-blue-900">Email/SMS alerts are enabled for saved searches, match changes, and status updates.</p>
-                  <p className="rounded-lg bg-slate-50 p-3 text-slate-700">Company review signal: {topMatch?.job.employerName || 'Employers'} averages 4.7/5 for pay reliability and site safety.</p>
-                  <p className="rounded-lg bg-emerald-50 p-3 text-emerald-900">Candidate quality score shown to employers: {Math.min(99, 78 + Math.round((myProfile?.rating || 4.5) * 4))}%.</p>
+                  {notificationItems.map((item, index) => (
+                    <p key={item} className={`rounded-lg p-3 ${
+                      index === 0 ? 'bg-blue-50 text-blue-900' : index === 1 ? 'bg-slate-50 text-slate-700' : 'bg-emerald-50 text-emerald-900'
+                    }`}>
+                      {item}
+                    </p>
+                  ))}
                 </div>
               </div>
             </div>
@@ -691,8 +637,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, showToa
               })}
             </div>
           </section>
-        </main>
-      </div>
+      </main>
     </div>
   );
 }

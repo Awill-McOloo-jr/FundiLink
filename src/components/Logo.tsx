@@ -1,9 +1,10 @@
 interface LogoProps {
   compact?: boolean;
   className?: string;
+  tone?: 'light' | 'dark';
 }
 
-export default function Logo({ compact = false, className = '' }: LogoProps) {
+export default function Logo({ compact = false, className = '', tone = 'dark' }: LogoProps) {
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <svg viewBox="0 0 48 48" className="h-10 w-10 shrink-0" aria-hidden="true">
@@ -21,7 +22,7 @@ export default function Logo({ compact = false, className = '' }: LogoProps) {
       </svg>
       {!compact && (
         <span className="min-w-0">
-          <span className="block font-display text-xl font-black tracking-tight text-white">
+          <span className={`block font-display text-xl font-black tracking-tight ${tone === 'light' ? 'text-slate-950' : 'text-white'}`}>
             fundi<span className="text-amber-300">link</span>
           </span>
           <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">

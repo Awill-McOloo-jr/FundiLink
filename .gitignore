@@ -1,0 +1,6 @@
+.vercel
+node_modules/
+server/*.sqlite
+server/*.sqlite-*
+.env
+.env.local
