@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { COUNTIES, JOB_CATEGORIES, SKILL_OPTIONS, formatKSh, generateId, getJobCategory, type Application, type Job, type JobCategory } from '../db/schema';
+import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import {
   AlertTriangle,
   Banknote,
@@ -140,10 +141,19 @@ export default function EmployerDashboard({ jobs, setJobs, applications, setAppl
               <BriefcaseBusiness className="h-3.5 w-3.5" />
               Employer hiring cockpit
             </span>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Manage jobs, candidates, interviews, and hiring outcomes.</h1>
+            <h1 className="mt-3 flex flex-wrap items-center gap-2 text-3xl font-black tracking-tight text-slate-950">
+              Manage jobs, candidates, interviews, and hiring outcomes.
+              <VerifiedEmployerBadge user={currentUser} className="h-5 w-5" />
+            </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Built for homeowners, contractors, and property managers who need a clean workflow from posting to shortlist to final offer.
             </p>
+            <button
+              onClick={() => onNavigate('profile')}
+              className="mt-4 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+            >
+              Manage employer verification
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[

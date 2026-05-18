@@ -10,11 +10,10 @@ interface AuthPageProps {
 }
 
 const authImages = [
-  'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1400&auto=format&fit=crop&q=85',
-  'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=1400&auto=format&fit=crop&q=85',
-  'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=1400&auto=format&fit=crop&q=85',
-  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1400&auto=format&fit=crop&q=85',
-  'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=1400&auto=format&fit=crop&q=85',
+  'https://images.pexels.com/photos/11174198/pexels-photo-11174198.jpeg?auto=compress&cs=tinysrgb&w=1800&h=2200&fit=crop',
+  'https://images.pexels.com/photos/5325460/pexels-photo-5325460.jpeg?auto=compress&cs=tinysrgb&w=1800&h=2200&fit=crop',
+  'https://images.pexels.com/photos/14704776/pexels-photo-14704776.jpeg?auto=compress&cs=tinysrgb&w=1800&h=2200&fit=crop',
+  'https://images.pexels.com/photos/5802827/pexels-photo-5802827.jpeg?auto=compress&cs=tinysrgb&w=1800&h=2200&fit=crop',
 ];
 
 export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
@@ -62,7 +61,7 @@ export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
     <div className="grid min-h-screen bg-white text-slate-950 lg:grid-cols-[minmax(320px,42vw)_1fr]">
       <section className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:border-r lg:border-slate-200 lg:px-10">
         <div className="w-full max-w-md">
-          <Logo tone="light" />
+          <Logo compact size="lg" className="mx-auto" />
           <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
             {authStep === 'otp_sent' ? (
               <form onSubmit={handleVerifyOTP} className="space-y-5">
@@ -150,7 +149,7 @@ export default function AuthPage({ onNavigate, showToast }: AuthPageProps) {
       </section>
 
       <section className="relative hidden min-h-screen overflow-hidden bg-slate-950 lg:block">
-        <img src={heroImage} alt="Fundis at work" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={heroImage} alt="African civil engineering professionals and construction infrastructure" className="absolute inset-0 h-full w-full object-cover" />
       </section>
     </div>
   );

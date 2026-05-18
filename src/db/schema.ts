@@ -38,6 +38,9 @@ export interface User {
   name: string;
   phone: string;           // +254 prefixed
   avatarUrl?: string;
+  verified?: boolean;
+  verificationStatus?: 'unverified' | 'pending' | 'verified';
+  verificationDocuments?: string[];
   passwordHash: string;    // bcrypt hash (simulated)
   otpCode?: string;        // 6-digit OTP (simulated)
   otpExpiry?: number;      // Unix timestamp
@@ -58,6 +61,8 @@ export interface Profile {
   hourlyRate: number;      // KSh
   avatarUrl: string;
   cvFileName?: string;
+  cvFileUrl?: string;
+  cvMimeType?: string;
   cvInsights?: string[];
   verificationDocuments?: string[];
   verificationStatus?: 'unverified' | 'pending' | 'verified';
@@ -184,15 +189,15 @@ export function defaultAvatarForUser(role: UserRole, name = '') {
 }
 
 export const SEED_USERS: User[] = [
-  { _id: 'u_fundi_1', email: 'kamau.mason@gmail.com', role: 'fundi', name: 'John Kamau', phone: '+254712345678', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 90*day, updatedAt: now - 2*day },
-  { _id: 'u_fundi_2', email: 'mwangi.plumber@yahoo.com', role: 'fundi', name: 'Peter Mwangi', phone: '+254722111222', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 60*day, updatedAt: now - 5*day },
-  { _id: 'u_fundi_3', email: 'amina.electric@gmail.com', role: 'fundi', name: 'Amina Onyango', phone: '+254733444555', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 45*day, updatedAt: now - 1*day },
-  { _id: 'u_fundi_4', email: 'njeri.carpentry@outlook.com', role: 'fundi', name: 'Grace Njeri', phone: '+254701999888', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 30*day, updatedAt: now - 3*day },
-  { _id: 'u_fundi_5', email: 'kipchoge.paint@gmail.com', role: 'fundi', name: 'Eliud Kipchoge', phone: '+254710555666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 20*day, updatedAt: now - 1*day },
-  { _id: 'u_emp_1', email: 'fatma.homes@gmail.com', role: 'employer', name: 'Fatma Juma', phone: '+254724888999', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 120*day, updatedAt: now - 1*day },
-  { _id: 'u_emp_2', email: 'david.contractors@gmail.com', role: 'employer', name: 'David Kiprop', phone: '+254799777666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 80*day, updatedAt: now - 2*day },
-  { _id: 'u_emp_3', email: 'wanjiku.estates@gmail.com', role: 'employer', name: 'Wanjiku Maina', phone: '+254711222333', avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 40*day, updatedAt: now - 7*day },
-  { _id: 'u_admin_1', email: 'moderator@fundilink.co.ke', role: 'admin', name: 'Admin Chief', phone: '+254700000000', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, createdAt: now - 365*day, updatedAt: now },
+  { _id: 'u_fundi_1', email: 'kamau.mason@gmail.com', role: 'fundi', name: 'John Kamau', phone: '+254712345678', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 90*day, updatedAt: now - 2*day },
+  { _id: 'u_fundi_2', email: 'mwangi.plumber@yahoo.com', role: 'fundi', name: 'Peter Mwangi', phone: '+254722111222', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 60*day, updatedAt: now - 5*day },
+  { _id: 'u_fundi_3', email: 'amina.electric@gmail.com', role: 'fundi', name: 'Amina Onyango', phone: '+254733444555', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 45*day, updatedAt: now - 1*day },
+  { _id: 'u_fundi_4', email: 'njeri.carpentry@outlook.com', role: 'fundi', name: 'Grace Njeri', phone: '+254701999888', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 30*day, updatedAt: now - 3*day },
+  { _id: 'u_fundi_5', email: 'kipchoge.paint@gmail.com', role: 'fundi', name: 'Eliud Kipchoge', phone: '+254710555666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 20*day, updatedAt: now - 1*day },
+  { _id: 'u_emp_1', email: 'fatma.homes@gmail.com', role: 'employer', name: 'Fatma Juma', phone: '+254724888999', avatarUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: true, verificationStatus: 'verified', verificationDocuments: ['kra-pin-fatma-homes.pdf', 'id-check-fatma-juma.pdf'], createdAt: now - 120*day, updatedAt: now - 1*day },
+  { _id: 'u_emp_2', email: 'david.contractors@gmail.com', role: 'employer', name: 'David Kiprop', phone: '+254799777666', avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: true, verificationStatus: 'verified', verificationDocuments: ['business-registration-kiprop-contractors.pdf', 'kra-pin-david-kiprop.pdf'], createdAt: now - 80*day, updatedAt: now - 2*day },
+  { _id: 'u_emp_3', email: 'wanjiku.estates@gmail.com', role: 'employer', name: 'Wanjiku Maina', phone: '+254711222333', avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'pending', verificationDocuments: ['property-manager-letter-wanjiku.pdf'], createdAt: now - 40*day, updatedAt: now - 7*day },
+  { _id: 'u_admin_1', email: 'moderator@fundilink.co.ke', role: 'admin', name: 'Admin Chief', phone: '+254700000000', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 365*day, updatedAt: now },
 ];
 
 export const SEED_PROFILES: Profile[] = [

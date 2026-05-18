@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import { COUNTIES, SKILL_OPTIONS, formatKSh, timeAgo, type Application, type Job, type ProfileViewEvent } from '../db/schema';
 import {
   AlertTriangle,
   Award,
   Banknote,
-  BarChart3,
   Bell,
   BookmarkPlus,
-  Bot,
   BriefcaseBusiness,
   Building2,
   CheckCircle2,
@@ -16,17 +15,13 @@ import {
   Clock3,
   Eye,
   FileText,
-  FolderKanban,
   Lightbulb,
   Layers,
   MapPinned,
   MessageSquare,
-  Search,
   Send,
-  Shield,
   SlidersHorizontal,
   Star,
-  TrendingUp,
   Video,
   XCircle,
   Zap,
@@ -37,6 +32,7 @@ interface FundiDashboardProps {
   applications: Application[];
   onNavigate: (page: string) => void;
   onOpenJob: (jobId: string) => void;
+  onOpenViewerProfile: (userId: string) => void;
   showToast: (msg: string) => void;
   profileViews: number;
   profileViewEvents: ProfileViewEvent[];
@@ -94,8 +90,8 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJob, showToast, profileViews, profileViewEvents }: FundiDashboardProps) {
-  const { currentUser, profiles } = useAuth();
+export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJob, onOpenViewerProfile, showToast, profileViews, profileViewEvents }: FundiDashboardProps) {
+  const { currentUser, profiles, users } = useAuth();
   const myProfile = currentUser ? profiles.find(p => p.userId === currentUser._id) : undefined;
 
   const [filterCounty, setFilterCounty] = useState(myProfile?.county || 'All Counties');
@@ -126,7 +122,6 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
   const profileSkills = myProfile?.skills || [];
   const completedJobs = myProfile?.completedJobs || 0;
   const successfulApplications = myApps.filter(app => ['offered', 'hired'].includes(app.status)).length;
-  const successRate = myApps.length ? Math.round((successfulApplications / myApps.length) * 100) : 0;
   const pendingApplications = myApps.filter(app => app.status === 'pending').length;
   const shortlistedApplications = myApps.filter(app => ['reviewed', 'interviewed'].includes(app.status)).length;
   const hiredOrOfferedApplications = successfulApplications;
@@ -188,47 +183,10 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
     safeRecommendationPage * recommendationPageSize + recommendationPageSize
   );
 
-  const openSkillMatches = jobs.filter(job => job.status === 'active' && !appliedJobIds.has(job._id) && job.skills.some(skill => profileSkills.includes(skill))).length;
   const topMatch = matchedJobs[0];
   const recentProfileViewers = [...profileViewEvents].sort((a, b) => b.viewedAt - a.viewedAt).slice(0, 4);
-  const earlierUntrackedViews = Math.max(0, profileViews - profileViewEvents.length);
   const displayedApplications = showAllApplications ? sortedApplications : sortedApplications.slice(0, 1);
   const cvInsightList = myProfile?.cvInsights || [];
-  const verificationDocuments = myProfile?.verificationDocuments || [];
-  const readinessItems = [
-    { label: 'Profile photo', done: Boolean(myProfile?.avatarUrl), detail: 'Helps employers identify you quickly.' },
-    { label: 'CV insights', done: cvInsightList.length > 0, detail: cvInsightList.length > 0 ? `${myProfile?.cvFileName || 'CV'} scanned for matching.` : 'Upload CV to extract skills and certifications.' },
-    { label: 'Portfolio evidence', done: Boolean(myProfile?.portfolioImages.length), detail: `${myProfile?.portfolioImages.length || 0} portfolio item(s).` },
-    { label: 'Verification', done: Boolean(myProfile?.verified), detail: myProfile?.verified ? 'Verified profile.' : `${verificationDocuments.length} evidence file(s) uploaded.` },
-  ];
-  const readinessScore = Math.round((readinessItems.filter(item => item.done).length / readinessItems.length) * 100);
-  const latestApplication = sortedApplications[0];
-  const latestApplicationJob = latestApplication ? jobs.find(job => job._id === latestApplication.jobId) : undefined;
-  const statusMessage = latestApplication
-    ? latestApplication.status === 'pending'
-      ? `Application sent to ${latestApplicationJob?.employerName || 'the employer'} for ${latestApplicationJob?.title || 'a job'}.`
-      : latestApplication.status === 'reviewed'
-        ? `${latestApplicationJob?.employerName || 'Employer'} has reviewed your application.`
-        : latestApplication.status === 'interviewed'
-          ? `Interview invitation received for ${latestApplicationJob?.title || 'your application'}.`
-          : latestApplication.status === 'offered'
-            ? `Offer received for ${latestApplicationJob?.title || 'your application'}.`
-            : latestApplication.status === 'hired'
-              ? `You were hired for ${latestApplicationJob?.title || 'the job'}.`
-              : latestApplication.status === 'rejected'
-                ? `${latestApplicationJob?.employerName || 'Employer'} selected another fundi for ${latestApplicationJob?.title || 'that job'}.`
-                : `Application status updated to ${latestApplication.status}.`
-    : 'No applications sent yet. Apply to a matching job to start receiving live updates.';
-  const replyCount = myApps.filter(app => app.status !== 'pending').length;
-  const notificationItems = [
-    statusMessage,
-    replyCount > 0
-      ? `${replyCount} application reply signal(s) received from employers.`
-      : 'No employer replies yet. Your dashboard will update when a status changes.',
-    readinessScore < 100
-      ? `Profile is ${readinessScore}% complete. Finish ${readinessItems.filter(item => !item.done).map(item => item.label.toLowerCase()).join(', ')} in the profile tab.`
-      : 'Profile is complete and ready for employer review.',
-  ];
   const strongestSkill = profileSkills[0] || topMatch?.matchedSkills[0] || 'your strongest trade';
   const applicationTips = [
     {
@@ -289,11 +247,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
         <div className="grid gap-6 p-5 lg:grid-cols-[1.2fr_0.8fr] lg:p-7">
           <div className="space-y-5">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-md bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-blue-100">
-                <Bot className="h-3.5 w-3.5 text-amber-300" />
-                AI matching workspace
-              </span>
-              <h1 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">Welcome back, {currentUser.name}</h1>
+              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Welcome back, {currentUser.name}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
                 Jobs are ranked by skill fit, experience, location, pay compatibility, work preference, and hiring feedback signals.
               </p>
@@ -301,10 +255,7 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
 
             <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Application pipeline</p>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-300">
-                  Live from your applications
-                </span>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Your job applications</p>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
                 {applicationStatusCards.map(card => {
@@ -440,12 +391,18 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
                   <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm leading-6 text-slate-500">
                     No unapplied jobs match the current filters. Clear filters or wait for new jobs from employers.
                   </div>
-                ) : visibleRecommendations.map(({ job, matchedSkills, adjacentSkills, score, distance, level, workMode, companyType: type }) => (
+                ) : visibleRecommendations.map(({ job, matchedSkills, adjacentSkills, score, distance, level, workMode, companyType: type }) => {
+                  const employer = users.find(user => user._id === job.employerId);
+                  return (
                   <div key={job._id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h3 className="font-black text-slate-900">{job.title}</h3>
-                        <p className="mt-1 text-xs text-slate-500">{job.employerName} / {type} / {job.county} / {distance} km</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          <span>{job.employerName}</span>
+                          <VerifiedEmployerBadge user={employer} />
+                          <span>/ {type} / {job.county} / {distance} km</span>
+                        </p>
                       </div>
                       <div className="text-left sm:text-right">
                         <p className="text-2xl font-black text-[#005fec]">{score}%</p>
@@ -470,7 +427,8 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
                       Skill fit: {matchedSkills.length}/{job.skills.length} exact, {adjacentSkills.length} adjacent. Score also includes distance, pay range, experience, and employer outcome signals.
                     </p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {filteredJobs.length > recommendationPageSize && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
@@ -620,77 +578,10 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
                     </div>
                   );
                 })}
-                {myApps.length > 1 && (
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status of all applications</p>
-                    <div className="mt-3 space-y-2">
-                      {sortedApplications.map(app => {
-                        const job = jobs.find(item => item._id === app.jobId);
-                        return (
-                          <div key={`status-${app._id}`} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="min-w-0 truncate font-bold text-slate-700">{job?.title || 'Unknown job'}</span>
-                            <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-black uppercase ${
-                              app.status === 'hired' || app.status === 'offered' ? 'bg-emerald-100 text-emerald-800' :
-                              app.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                              app.status === 'interviewed' || app.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
-                              'bg-amber-100 text-amber-800'
-                            }`}>
-                              {app.status === 'hired' ? 'Hired' : app.status}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                  <ClipboardCheck className="h-4 w-4 text-[#005fec]" />
-                  Verification and portfolio
-                </h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {[
-                    { title: 'Skill evidence', meta: `${profileSkills.length} live skill(s) listed`, icon: ClipboardCheck },
-                    { title: 'Verification badge', meta: myProfile?.verified ? 'Active on profile cards' : `${verificationDocuments.length} evidence file(s) uploaded`, icon: Shield },
-                    { title: 'Portfolio showcase', meta: `${myProfile?.portfolioImages.length || 0} projects`, icon: FolderKanban },
-                    { title: 'CV intelligence', meta: cvInsightList.length ? `${cvInsightList.length} extracted insight(s)` : 'No CV scanned yet', icon: FileText },
-                  ].map(item => {
-                    const Icon = item.icon;
-                    return (
-                      <div key={item.title} className="rounded-lg bg-slate-50 p-3">
-                        <Icon className="h-4 w-4 text-[#005fec]" />
-                        <p className="mt-2 text-xs font-black text-slate-900">{item.title}</p>
-                        <p className="text-[11px] text-slate-500">{item.meta}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button onClick={() => onNavigate('profile')} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-xs font-black text-white transition hover:bg-slate-800">
-                  <Shield className="h-3.5 w-3.5" />
-                  Open verification center
-                </button>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                  <Bell className="h-4 w-4 text-[#005fec]" />
-                  Notifications and reviews
-                </h2>
-                <div className="mt-4 space-y-2 text-xs">
-                  {notificationItems.map((item, index) => (
-                    <p key={item} className={`rounded-lg p-3 ${
-                      index === 0 ? 'bg-blue-50 text-blue-900' : index === 1 ? 'bg-slate-50 text-slate-700' : 'bg-emerald-50 text-emerald-900'
-                    }`}>
-                      {item}
-                    </p>
-                  ))}
-                </div>
-              </div>
-
               <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -707,7 +598,13 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
                       No named viewers recorded yet. New profile visits will show the viewer, avatar, and time here.
                     </div>
                   ) : recentProfileViewers.map(view => (
-                    <div key={view._id} className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+                    <button
+                      key={view._id}
+                      type="button"
+                      disabled={!view.viewerId}
+                      onClick={() => view.viewerId && onOpenViewerProfile(view.viewerId)}
+                      className="flex w-full items-center gap-3 rounded-lg bg-slate-50 p-3 text-left transition hover:bg-blue-50 hover:shadow-sm active:scale-[0.99] disabled:cursor-default disabled:hover:bg-slate-50 disabled:hover:shadow-none"
+                    >
                       {view.viewerAvatarUrl ? (
                         <img src={view.viewerAvatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200" />
                       ) : (
@@ -720,61 +617,10 @@ export default function FundiDashboard({ jobs, applications, onNavigate, onOpenJ
                         <p className="text-[11px] capitalize text-slate-500">{view.viewerRole === 'guest' ? 'Guest visitor' : view.viewerRole}</p>
                       </div>
                       <span className="shrink-0 text-[11px] font-bold text-slate-400">{timeAgo(view.viewedAt)}</span>
-                    </div>
+                    </button>
                   ))}
-                  {earlierUntrackedViews > 0 && (
-                    <p className="rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">
-                      {earlierUntrackedViews} earlier view{earlierUntrackedViews === 1 ? '' : 's'} happened before viewer tracking was enabled.
-                    </p>
-                  )}
                 </div>
               </div>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <BarChart3 className="h-4 w-4 text-[#005fec]" />
-              Profile readiness
-            </h2>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[240px_1fr]">
-              <div className="rounded-lg bg-slate-950 p-4 text-white">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Readiness score</p>
-                <p className="mt-2 text-4xl font-black">{readinessScore}%</p>
-                <p className="mt-2 text-xs leading-5 text-slate-300">Complete the profile evidence employers use when shortlisting.</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {readinessItems.map(item => (
-                  <div key={item.label} className="rounded-lg bg-slate-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black text-slate-900">{item.label}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</p>
-                      </div>
-                      <span className={`rounded-md px-2 py-1 text-[10px] font-black ${item.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {item.done ? 'Done' : 'Needed'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {[
-                { label: 'Profile views', value: profileViews, helper: `${profileViewEvents.length} named, ${earlierUntrackedViews} earlier untracked`, icon: Eye },
-                { label: 'Application success', value: `${successRate}%`, helper: `${successfulApplications}/${myApps.length} offered or hired applications`, icon: TrendingUp },
-                { label: 'Open skill matches', value: openSkillMatches, helper: 'Active jobs requiring your skills', icon: Search },
-              ].map(item => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.label} className="rounded-lg bg-slate-50 p-4">
-                    <Icon className="h-4 w-4 text-[#005fec]" />
-                    <p className="mt-3 text-xl font-black text-slate-900">{item.value}</p>
-                    <p className="text-[11px] font-bold text-slate-500">{item.label}</p>
-                    <p className="text-[10px] text-slate-400">{item.helper}</p>
-                  </div>
-                );
-              })}
             </div>
           </section>
       </main>

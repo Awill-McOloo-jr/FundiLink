@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { formatKSh, type Job, type Review } from '../db/schema';
-import { Star, MapPin } from 'lucide-react';
+import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
+import { isFundiBadgeActive } from '../utils/verification';
+import { ExternalLink, FileText, Star, MapPin } from 'lucide-react';
 
 interface FundiProfilePageProps {
   selectedFundiId: string;
@@ -30,6 +32,7 @@ export default function FundiProfilePage({ selectedFundiId, profileViews, onProf
   if (!profile || !user) return <div className="p-8 text-center text-slate-500">Fundi profile not found.</div>;
 
   const fundiReviews = reviews.filter(r => r.revieweeId === selectedFundiId);
+  const badgeActive = isFundiBadgeActive(profile, user);
 
   const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +62,7 @@ export default function FundiProfilePage({ selectedFundiId, profileViews, onProf
             <div>
               <div className="flex items-center justify-center sm:justify-start gap-2">
                 <h1 className="text-xl sm:text-2xl font-display font-black tracking-tight">{user.name}</h1>
-                {profile.verified && <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">✓ NCA Vetted</span>}
+                {badgeActive && <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">✓ Vetted</span>}
               </div>
               <p className="text-xs text-blue-200 font-mono mt-0.5 flex items-center gap-1 justify-center sm:justify-start">
                 <MapPin className="h-3 w-3" /> {profile.county} County, Kenya
@@ -110,6 +113,45 @@ export default function FundiProfilePage({ selectedFundiId, profileViews, onProf
             </div>
 
             <div>
+              <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">CV</h3>
+              {profile.cvFileName ? (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#005fec]">
+                        <FileText className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-900">{profile.cvFileName}</p>
+                        <p className="text-[11px] text-slate-500">Uploaded CV available for employers to review.</p>
+                      </div>
+                    </div>
+                    {profile.cvFileUrl && (
+                      <a
+                        href={profile.cvFileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white transition hover:bg-[#005fec]"
+                      >
+                        View CV
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                  {profile.cvInsights?.length ? (
+                    <div className="mt-3 space-y-2">
+                      {profile.cvInsights.map(insight => (
+                        <p key={insight} className="rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-slate-600">{insight}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl border">No CV uploaded yet.</p>
+              )}
+            </div>
+
+            <div>
               <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Portfolio ({profile.portfolioImages.length} items)</h3>
               {profile.portfolioImages.length > 0 ? (
                 <div className="grid grid-cols-2 gap-3">
@@ -128,7 +170,10 @@ export default function FundiProfilePage({ selectedFundiId, profileViews, onProf
                 {fundiReviews.map(rev => (
                   <div key={rev._id} className="bg-white border border-slate-100 p-3.5 rounded-xl space-y-1 text-xs">
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-800">{rev.reviewerName}</span>
+                      <span className="flex items-center gap-1.5 font-bold text-slate-800">
+                        {rev.reviewerName}
+                        <VerifiedEmployerBadge user={users.find(item => item._id === rev.reviewerId)} />
+                      </span>
                       <span className="text-amber-500 font-bold text-[11px]">{'★'.repeat(rev.rating)} ({rev.rating}.0)</span>
                     </div>
                     <p className="text-slate-600 italic">"{rev.comment}"</p>

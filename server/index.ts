@@ -101,6 +101,9 @@ function normalizeExistingState() {
   const users = state.users.map(user => ({
     ...user,
     avatarUrl: user.avatarUrl || SEED_USERS.find(seedUser => seedUser._id === user._id)?.avatarUrl || defaultAvatarForUser(user.role, user.name),
+    verified: user.verified ?? SEED_USERS.find(seedUser => seedUser._id === user._id)?.verified ?? false,
+    verificationStatus: user.verificationStatus || SEED_USERS.find(seedUser => seedUser._id === user._id)?.verificationStatus || (user.verified ? 'verified' : 'unverified'),
+    verificationDocuments: user.verificationDocuments || SEED_USERS.find(seedUser => seedUser._id === user._id)?.verificationDocuments || [],
   }));
   const existingJobsById = new Map(state.jobs.map(job => [job._id, job]));
   const jobsWithSeedBackfill = [
@@ -124,6 +127,8 @@ function normalizeExistingState() {
       avatarUrl,
       verificationStatus: profile.verificationStatus || (profile.verified ? 'verified' : 'unverified'),
       verificationDocuments: profile.verificationDocuments || [],
+      cvFileUrl: profile.cvFileUrl || '',
+      cvMimeType: profile.cvMimeType || '',
       cvInsights: profile.cvInsights || [],
     };
   });
@@ -182,6 +187,9 @@ app.post('/api/auth/signup', (req, res) => {
     name: data.name,
     phone: data.phone.startsWith('+254') ? data.phone : `+254${data.phone.replace(/^0/, '')}`,
     avatarUrl: defaultAvatarForUser(data.role, data.name),
+    verified: false,
+    verificationStatus: 'unverified',
+    verificationDocuments: [],
     passwordHash: hashPassword(data.password),
     isSuspended: false,
     createdAt: Date.now(),
@@ -218,6 +226,8 @@ app.post('/api/auth/verify', (req, res) => {
           county: 'Nairobi',
           hourlyRate: 350,
           avatarUrl: currentUser.avatarUrl || defaultAvatarForUser(currentUser.role, currentUser.name),
+          cvFileUrl: '',
+          cvMimeType: '',
           cvInsights: [],
           verificationDocuments: [],
           verificationStatus: 'unverified',

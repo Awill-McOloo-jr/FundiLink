@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import {
   SEED_JOBS, SEED_APPLICATIONS, SEED_MESSAGES, SEED_REVIEWS, SEED_PAYMENTS,
@@ -8,14 +8,19 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import JobsPage from './pages/JobsPage';
 import FundiProfilePage from './pages/FundiProfilePage';
+import FundisDirectoryPage from './pages/FundisDirectoryPage';
 import AuthPage from './pages/AuthPage';
 import { AdminDashboard } from './pages/Dashboards';
 import FundiDashboard from './pages/FundiDashboard';
 import FundiProfileManager from './pages/FundiProfileManager';
 import EmployerDashboard from './pages/EmployerDashboard';
 import MessagesPage from './pages/MessagesPage';
+import FundiKnowledgePage from './pages/FundiKnowledgePage';
+import NotificationsPage from './pages/NotificationsPage';
+import PublicUserProfilePage from './pages/PublicUserProfilePage';
+import { getNotificationSignals, getUnreadMessageCount } from './utils/notificationSignals';
 
-type Page = 'home' | 'jobs' | 'job-detail' | 'fundi-profile' | 'profile' | 'auth' | 'dashboard-fundi' | 'dashboard-employer' | 'admin' | 'messages';
+type Page = 'home' | 'fundis' | 'jobs' | 'job-detail' | 'fundi-profile' | 'user-profile' | 'profile' | 'auth' | 'dashboard-fundi' | 'dashboard-employer' | 'admin' | 'messages' | 'knowledge' | 'notifications';
 
 const APP_STORAGE_KEY = 'fundilink.app-state.v1';
 
@@ -32,6 +37,7 @@ type StoredAppState = {
   filterCounty?: string;
   filterSkill?: string;
   filterQuery?: string;
+  seenNotificationKeys?: string[];
 };
 
 function readStoredAppState(): StoredAppState {
@@ -45,15 +51,19 @@ function readStoredAppState(): StoredAppState {
 
 const pagePaths: Record<Page, string> = {
   home: '/',
+  fundis: '/fundis',
   jobs: '/jobs',
   'job-detail': '/jobs/detail',
   'fundi-profile': '/fundis/public-profile',
+  'user-profile': '/users/profile',
   profile: '/profile',
   auth: '/auth',
   'dashboard-fundi': '/dashboard/fundi',
   'dashboard-employer': '/dashboard/employer',
   admin: '/admin',
   messages: '/messages',
+  knowledge: '/knowledge',
+  notifications: '/notifications',
 };
 
 function pageFromPath(pathname: string): Page | null {
@@ -61,12 +71,16 @@ function pageFromPath(pathname: string): Page | null {
   if (pathname.startsWith('/jobs/detail')) return 'job-detail';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/fundis/public-profile')) return 'fundi-profile';
+  if (pathname.startsWith('/fundis')) return 'fundis';
+  if (pathname.startsWith('/users/profile')) return 'user-profile';
   if (pathname.startsWith('/profile')) return 'profile';
   if (pathname.startsWith('/auth')) return 'auth';
   if (pathname.startsWith('/dashboard/employer')) return 'dashboard-employer';
   if (pathname.startsWith('/dashboard/fundi')) return 'dashboard-fundi';
   if (pathname.startsWith('/admin')) return 'admin';
   if (pathname.startsWith('/messages')) return 'messages';
+  if (pathname.startsWith('/knowledge')) return 'knowledge';
+  if (pathname.startsWith('/notifications')) return 'notifications';
   return null;
 }
 
@@ -94,6 +108,7 @@ function AppContent() {
   const [filterCounty, setFilterCounty] = useState(storedAppState.filterCounty || 'All Counties');
   const [filterSkill, setFilterSkill] = useState(storedAppState.filterSkill || 'All Skills');
   const [filterQuery, setFilterQuery] = useState(storedAppState.filterQuery || '');
+  const [seenNotificationKeys, setSeenNotificationKeys] = useState<string[]>(storedAppState.seenNotificationKeys || []);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -101,6 +116,19 @@ function AppContent() {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  const notificationSignals = useMemo(() => getNotificationSignals({
+    currentUser,
+    profiles,
+    applications,
+    jobs,
+  }), [applications, currentUser, jobs, profiles]);
+  const seenNotificationKeySet = useMemo(() => new Set(seenNotificationKeys), [seenNotificationKeys]);
+  const notificationKeyPrefix = currentUser ? `${currentUser._id}:` : '';
+  const notificationBadgeCount = currentUser
+    ? notificationSignals.filter(signal => !seenNotificationKeySet.has(`${notificationKeyPrefix}${signal.id}`)).length
+    : 0;
+  const unreadMessageCount = getUnreadMessageCount(currentUser, messages);
 
   const navigate = useCallback((page: string) => {
     const nextPage = page as Page;
@@ -130,6 +158,11 @@ function AppContent() {
     navigate('job-detail');
   }, [navigate]);
 
+  const openUserProfile = useCallback((userId: string) => {
+    setSelectedFundiId(userId);
+    navigate('user-profile');
+  }, [navigate]);
+
   const recordProfileView = useCallback((fundiId: string) => {
     const viewKey = `${currentUser?._id || 'guest'}:${fundiId}`;
     if (recordedProfileViews.current.has(viewKey)) return;
@@ -154,6 +187,15 @@ function AppContent() {
       ...prev,
     ].slice(0, 250));
   }, [currentUser, profiles]);
+
+  useEffect(() => {
+    if (currentPage !== 'notifications' || !currentUser || notificationSignals.length === 0) return;
+    const visibleNotificationKeys = notificationSignals.map(signal => `${currentUser._id}:${signal.id}`);
+    setSeenNotificationKeys(prev => {
+      const merged = Array.from(new Set([...prev, ...visibleNotificationKeys])).slice(-500);
+      return merged.length === prev.length ? prev : merged;
+    });
+  }, [currentPage, currentUser, notificationSignals]);
 
   useEffect(() => {
     let alive = true;
@@ -196,6 +238,7 @@ function AppContent() {
       filterCounty,
       filterSkill,
       filterQuery,
+      seenNotificationKeys,
     } satisfies StoredAppState));
     fetch('/api/state', {
       method: 'PUT',
@@ -223,6 +266,7 @@ function AppContent() {
     selectedFundiId,
     selectedJobId,
     serverLoaded,
+    seenNotificationKeys,
   ]);
 
   useEffect(() => {
@@ -249,11 +293,12 @@ function AppContent() {
           return (
             <FundiDashboard
               jobs={jobs}
-              applications={applications}
-              onNavigate={navigateFromFundiDashboard}
-              onOpenJob={openJobDetail}
-              showToast={showToast}
-              profileViews={profileViews[currentUser._id] || 0}
+            applications={applications}
+            onNavigate={navigateFromFundiDashboard}
+            onOpenJob={openJobDetail}
+            onOpenViewerProfile={openUserProfile}
+            showToast={showToast}
+            profileViews={profileViews[currentUser._id] || 0}
               profileViewEvents={profileViewEvents.filter(event => event.fundiId === currentUser._id)}
             />
           );
@@ -291,6 +336,14 @@ function AppContent() {
             onFilterChange={handleFilterChange}
           />
         );
+      case 'fundis':
+        return (
+          <FundisDirectoryPage
+            onNavigate={navigate}
+            onSelectFundi={(id) => setSelectedFundiId(id)}
+            initialCounty={filterCounty}
+          />
+        );
       case 'jobs':
       case 'job-detail':
         return (
@@ -325,6 +378,19 @@ function AppContent() {
             showToast={showToast}
           />
         );
+      case 'user-profile':
+        return (
+          <PublicUserProfilePage
+            selectedUserId={selectedFundiId}
+            profileViews={profileViews[selectedFundiId] || 0}
+            onProfileView={recordProfileView}
+            jobs={jobs}
+            reviews={reviews}
+            setReviews={setReviews}
+            onNavigate={navigate}
+            showToast={showToast}
+          />
+        );
       case 'profile':
         return (
           <FundiProfileManager
@@ -345,6 +411,7 @@ function AppContent() {
             applications={applications}
             onNavigate={navigateFromFundiDashboard}
             onOpenJob={openJobDetail}
+            onOpenViewerProfile={openUserProfile}
             showToast={showToast}
             profileViews={currentUser ? profileViews[currentUser._id] || 0 : 0}
             profileViewEvents={currentUser ? profileViewEvents.filter(event => event.fundiId === currentUser._id) : []}
@@ -382,6 +449,10 @@ function AppContent() {
             showToast={showToast}
           />
         );
+      case 'knowledge':
+        return <FundiKnowledgePage />;
+      case 'notifications':
+        return <NotificationsPage jobs={jobs} applications={applications} onNavigate={navigate} onOpenJob={openJobDetail} />;
       default:
         return <HomePage onNavigate={navigate} onSelectFundi={(id) => setSelectedFundiId(id)} onFilterChange={handleFilterChange} />;
     }
@@ -400,6 +471,8 @@ function AppContent() {
       onDismissToast={() => setToast(null)}
       selectedJobId={selectedJobId}
       selectedFundiId={selectedFundiId}
+      notificationBadgeCount={notificationBadgeCount}
+      unreadMessageCount={unreadMessageCount}
     >
       {renderPage()}
     </Layout>

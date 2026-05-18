@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { generateId, type Message, type Profile, type User } from '../db/schema';
+import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import {
   MessageCircle,
   Paperclip,
@@ -279,7 +280,10 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
 
                   <span className="min-w-0 flex-1 border-b border-slate-200/70 pb-2 group-last:border-b-0">
                     <span className="flex items-center justify-between gap-3">
-                      <span className="truncate text-[15px] font-black text-slate-950">{user?.name || conversation.otherUser}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-[15px] font-black text-slate-950">{user?.name || conversation.otherUser}</span>
+                        <VerifiedEmployerBadge user={user} />
+                      </span>
                       <span className="shrink-0 text-[11px] font-bold text-slate-400">{formatTime(conversation.lastTime)}</span>
                     </span>
                     <span className="mt-0.5 flex min-w-0 items-center justify-between gap-3">
@@ -310,7 +314,10 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                     </span>
                   )}
                   <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black text-slate-950">{activeReceiver.name}</p>
+                    <p className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[15px] font-black text-slate-950">{activeReceiver.name}</span>
+                      <VerifiedEmployerBadge user={activeReceiver} />
+                    </p>
                   </div>
                 </div>
               </header>
@@ -326,7 +333,10 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                           {initials(activeReceiver.name)}
                         </div>
                       )}
-                      <p className="mt-4 text-xl font-black text-slate-950">{activeReceiver.name}</p>
+                      <p className="mt-4 flex items-center justify-center gap-1.5 text-xl font-black text-slate-950">
+                        {activeReceiver.name}
+                        <VerifiedEmployerBadge user={activeReceiver} className="h-5 w-5" />
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -458,7 +468,10 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-black text-slate-950">{user.name}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="block truncate text-sm font-black text-slate-950">{user.name}</span>
+                          <VerifiedEmployerBadge user={user} />
+                        </span>
                         <span className="mt-0.5 block truncate text-xs text-slate-500">{detail}</span>
                       </span>
                     </button>

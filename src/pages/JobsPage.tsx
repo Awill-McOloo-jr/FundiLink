@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import {
   COUNTIES,
   JOB_CATEGORIES,
@@ -14,7 +15,6 @@ import {
 } from '../db/schema';
 import {
   ArrowRight,
-  BadgeCheck,
   Banknote,
   Briefcase,
   Building2,
@@ -84,10 +84,11 @@ export default function JobsPage({
   onNavigate,
   showToast,
 }: JobsPageProps) {
-  const { currentUser, isAuthenticated, profiles } = useAuth();
+  const { currentUser, isAuthenticated, profiles, users } = useAuth();
   const [view, setView] = useState<View>(() => isDetailPage ? 'detail' : 'list');
   const [maxBudget, setMaxBudget] = useState(100000);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All Categories');
+  const [jobsPage, setJobsPage] = useState(0);
   const [coverLetter, setCoverLetter] = useState('');
 
   useEffect(() => {
@@ -127,7 +128,20 @@ export default function JobsPage({
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [activeJobs, categoryFilter, filterCounty, filterQuery, filterSkill, maxBudget]);
 
+  useEffect(() => {
+    setJobsPage(0);
+  }, [categoryFilter, filterCounty, filterQuery, filterSkill, maxBudget]);
+
+  const jobsPerPage = 12;
+  const jobsTotalPages = Math.max(1, Math.ceil(filteredJobs.length / jobsPerPage));
+  const safeJobsPage = Math.min(jobsPage, jobsTotalPages - 1);
+  const visibleJobs = filteredJobs.slice(safeJobsPage * jobsPerPage, safeJobsPage * jobsPerPage + jobsPerPage);
+  const selectedCategoryHint = categoryFilter === 'All Categories'
+    ? 'Showing every active trade category. Use the dropdown to focus the work list.'
+    : categoryHints[categoryFilter as JobCategory];
+
   const selectedJob = jobs.find(job => job._id === selectedJobId);
+  const selectedEmployer = selectedJob ? users.find(user => user._id === selectedJob.employerId) : undefined;
   const selectedCategory = selectedJob ? getJobCategory(selectedJob) : 'Building Construction';
   const jobApps = applications.filter(application => application.jobId === selectedJobId);
   const hasApplied = currentUser ? applications.some(application => application.jobId === selectedJobId && application.fundiId === currentUser._id) : false;
@@ -202,17 +216,17 @@ export default function JobsPage({
                 </span>
                 <h1 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">{selectedJob.title}</h1>
                 <p className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-                  <span>Client: <strong className="text-white">{selectedJob.employerName}</strong></span>
+                  <span className="inline-flex items-center gap-1.5">Client: <strong className="text-white">{selectedJob.employerName}</strong><VerifiedEmployerBadge user={selectedEmployer} /></span>
                   <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {selectedJob.county}</span>
                   <span className="flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> {selectedJob.deadline}</span>
                   <span>Posted {timeAgo(selectedJob.createdAt)}</span>
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-left sm:text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Budget</p>
-                <p className="text-2xl font-black text-white">{formatKSh(selectedJob.budget)}</p>
-                <p className="mt-1 text-[11px] font-bold text-emerald-300">M-Pesa ready</p>
+              <div className="rounded-xl border border-blue-300/20 bg-blue-400/10 p-4 text-left shadow-inner shadow-blue-950/20 sm:text-right">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-100">Client offer</p>
+                <p className="mt-1 text-2xl font-black text-white">{formatKSh(selectedJob.budget)}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-300">Indicative labour budget</p>
               </div>
             </div>
           </div>
@@ -336,36 +350,31 @@ export default function JobsPage({
         </div>
       </section>
 
-      <section className="mb-6">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-            <Layers className="h-4 w-4 text-[#005fec]" />
-            Categories
-          </h2>
-          <button onClick={handleResetFilters} className="text-xs font-black text-[#005fec] hover:underline">Clear filters</button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {JOB_CATEGORIES.filter(category => category !== 'All Categories').map(category => {
-            const count = categoryCounts.get(category) || 0;
-            const active = categoryFilter === category;
-            return (
-              <button
-                key={category}
-                onClick={() => setCategoryFilter(active ? 'All Categories' : category)}
-                className={`group rounded-2xl border p-4 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl active:scale-[0.98] ${
-                  active ? 'border-[#005fec] bg-[#005fec] text-white' : 'border-slate-200 bg-white text-slate-900 hover:border-blue-300'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-black">{category}</span>
-                  <span className={`rounded-lg px-2 py-1 text-[10px] font-black ${active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{count}</span>
-                </div>
-                <p className={`mt-2 text-[11px] leading-5 ${active ? 'text-blue-100' : 'text-slate-500'}`}>
-                  {categoryHints[category]}
-                </p>
-              </button>
-            );
-          })}
+      <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px] lg:items-center">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
+              <Layers className="h-4 w-4 text-[#005fec]" />
+              Select work category
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{selectedCategoryHint}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)}
+              className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-[#005fec] focus:bg-white"
+            >
+              {JOB_CATEGORIES.map(category => (
+                <option key={category} value={category}>
+                  {category === 'All Categories' ? 'All Categories' : `${category} (${categoryCounts.get(category) || 0})`}
+                </option>
+              ))}
+            </select>
+            <button onClick={handleResetFilters} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-[#005fec] transition hover:bg-blue-50 active:scale-95">
+              Clear filters
+            </button>
+          </div>
         </div>
       </section>
 
@@ -394,17 +403,6 @@ export default function JobsPage({
                 />
                 <Search className="absolute left-2.5 top-3 h-3.5 w-3.5 text-slate-400" />
               </div>
-            </label>
-
-            <label className="block text-xs font-bold text-slate-700">
-              Category
-              <select
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-medium outline-none"
-              >
-                {JOB_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}
-              </select>
             </label>
 
             <label className="block text-xs font-bold text-slate-700">
@@ -461,8 +459,10 @@ export default function JobsPage({
 
         <section className="space-y-4 lg:col-span-3">
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500">
-            <span>Found <strong>{filteredJobs.length}</strong> active jobs</span>
-            <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700">Newest first</span>
+            <span>Available jobs: <strong>{filteredJobs.length}</strong></span>
+            <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700">
+              Page {safeJobsPage + 1}/{jobsTotalPages}
+            </span>
           </div>
 
           {filteredJobs.length === 0 ? (
@@ -475,8 +475,11 @@ export default function JobsPage({
               </button>
             </div>
           ) : (
-            filteredJobs.map(job => {
+            <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {visibleJobs.map(job => {
               const category = getJobCategory(job);
+              const employer = users.find(user => user._id === job.employerId);
               return (
                 <button
                   key={job._id}
@@ -486,7 +489,7 @@ export default function JobsPage({
                     onNavigate('job-detail');
                     setCoverLetter('');
                   }}
-                  className="group block w-full cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl active:scale-[0.99] sm:p-6"
+                  className="group flex min-h-[340px] w-full cursor-pointer flex-col rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition duration-300 hover:-translate-y-1.5 hover:border-blue-400 hover:shadow-2xl hover:shadow-blue-100/80 active:scale-[0.99] sm:p-5"
                 >
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
@@ -497,48 +500,82 @@ export default function JobsPage({
                       <MapPin className="h-3.5 w-3.5" />
                       {job.county}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                      <BadgeCheck className="h-3.5 w-3.5" />
-                      M-Pesa ready
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                      <Banknote className="h-3.5 w-3.5" />
+                      Client offer listed
                     </span>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h2 className="text-lg font-black tracking-tight text-slate-950 transition group-hover:text-[#005fec]">{job.title}</h2>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{job.description}</p>
-                    </div>
-                    <div className="shrink-0 rounded-xl border border-blue-100 bg-blue-50 p-3 text-left sm:text-right">
-                      <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:justify-end">
+                  <div className="flex flex-1 flex-col">
+                    <h2 className="text-base font-black tracking-tight text-slate-950 transition group-hover:text-[#005fec]">{job.title}</h2>
+                    <p
+                      className="mt-2 text-sm leading-6 text-slate-600"
+                      style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                    >
+                      {job.description}
+                    </p>
+
+                    <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                      <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
                         <Banknote className="h-3.5 w-3.5" />
-                        Budget
+                        Client offer
                       </p>
-                      <p className="text-lg font-black text-[#005fec]">{formatKSh(job.budget)}</p>
+                      <p className="text-xl font-black text-[#005fec]">{formatKSh(job.budget)}</p>
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-1.5">
-                    {job.skills.map(skill => (
+                    {job.skills.slice(0, 4).map(skill => (
                       <span key={skill} className="rounded-md bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
                         {skill}
                       </span>
                     ))}
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs">
-                    <div className="flex flex-wrap items-center gap-4 text-slate-500">
-                      <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {job.employerName}</span>
-                      <span className="flex items-center gap-1"><Hammer className="h-3.5 w-3.5" /> {job.applicationsCount} applications</span>
-                      <span>{timeAgo(job.createdAt)}</span>
+                  <div className="mt-auto border-t border-slate-100 pt-3 text-xs">
+                    <div className="space-y-2 text-slate-500">
+                      <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> <span className="truncate">{job.employerName}</span><VerifiedEmployerBadge user={employer} /></span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="flex items-center gap-1"><Hammer className="h-3.5 w-3.5" /> {job.applicationsCount} applications</span>
+                        <span>{timeAgo(job.createdAt)}</span>
+                      </div>
                     </div>
-                    <span className="flex items-center gap-1 rounded-xl bg-[#005fec] px-4 py-2 text-xs font-black text-white transition group-hover:translate-x-0.5">
+                    <span className="mt-3 flex items-center justify-center gap-1 rounded-xl bg-[#005fec] px-4 py-2.5 text-xs font-black text-white transition group-hover:translate-x-0.5">
                       Review and apply
                       <ArrowRight className="h-3.5 w-3.5" />
                     </span>
                   </div>
                 </button>
               );
-            })
+            })}
+            </div>
+            {filteredJobs.length > jobsPerPage && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-bold text-slate-500">
+                  Showing {safeJobsPage * jobsPerPage + 1}-{Math.min(filteredJobs.length, (safeJobsPage + 1) * jobsPerPage)} of {filteredJobs.length} jobs
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setJobsPage(page => Math.max(0, page - 1))}
+                    disabled={safeJobsPage === 0}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">
+                    {safeJobsPage + 1}/{jobsTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setJobsPage(page => Math.min(jobsTotalPages - 1, page + 1))}
+                    disabled={safeJobsPage >= jobsTotalPages - 1}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </section>
       </div>

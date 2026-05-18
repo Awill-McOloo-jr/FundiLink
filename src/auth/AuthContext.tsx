@@ -19,6 +19,7 @@ interface AuthState {
   verifyOTP: (code: string) => Promise<AuthResult>;
   logout: () => void;
   switchUser: (userId: string) => void;
+  updateUser: (userId: string, updates: Partial<User>) => void;
   updateProfile: (userId: string, updates: Partial<Profile>) => void;
   suspendUser: (userId: string) => void;
 }
@@ -47,18 +48,30 @@ function migrateProfiles(profiles: Profile[]) {
   return profiles.map(profile => {
     const isUploadedImage = profile.avatarUrl.startsWith('data:');
     const isOldDefault = oldDefaultAvatarMarkers.some(marker => profile.avatarUrl.includes(marker));
-    if (isUploadedImage || !isOldDefault) return profile;
-    return {
+    const normalizedProfile = {
       ...profile,
+      cvFileUrl: profile.cvFileUrl || '',
+      cvMimeType: profile.cvMimeType || '',
+      cvInsights: profile.cvInsights || [],
+      verificationDocuments: profile.verificationDocuments || [],
+      verificationStatus: profile.verificationStatus || (profile.verified ? 'verified' : 'unverified'),
+    };
+    if (isUploadedImage || !isOldDefault) return normalizedProfile;
+    return {
+      ...normalizedProfile,
       avatarUrl: defaultAfricanAvatars[profile.userId] || profile.avatarUrl,
     };
   });
 }
 
 function migrateUsers(users: User[]) {
+  const seedUsersById = new Map(SEED_USERS.map(user => [user._id, user]));
   return users.map(user => ({
     ...user,
     avatarUrl: user.avatarUrl || defaultUserAvatars[user._id] || defaultAvatarForUser(user.role, user.name),
+    verified: user.verified ?? seedUsersById.get(user._id)?.verified ?? false,
+    verificationStatus: user.verificationStatus || seedUsersById.get(user._id)?.verificationStatus || (user.verified ? 'verified' : 'unverified'),
+    verificationDocuments: user.verificationDocuments || seedUsersById.get(user._id)?.verificationDocuments || [],
   }));
 }
 
@@ -156,6 +169,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthStep('authenticated');
   }, [users]);
 
+  const updateUser = useCallback((userId: string, updates: Partial<User>) => {
+    const updatedAt = Date.now();
+    setUsers(prev => prev.map(user =>
+      user._id === userId ? { ...user, ...updates, updatedAt } : user
+    ));
+    setCurrentUser(current => current?._id === userId ? { ...current, ...updates, updatedAt } : current);
+  }, []);
+
   const updateProfile = useCallback((userId: string, updates: Partial<Profile>) => {
     setProfiles(prev => prev.map(profile =>
       profile.userId === userId ? { ...profile, ...updates, updatedAt: Date.now() } : profile
@@ -182,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyOTP,
       logout,
       switchUser,
+      updateUser,
       updateProfile,
       suspendUser,
     }}>
