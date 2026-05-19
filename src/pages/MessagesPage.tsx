@@ -3,11 +3,16 @@ import { useAuth } from '../auth/AuthContext';
 import { generateId, type Message, type Profile, type User } from '../db/schema';
 import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import {
+  Archive,
+  ArrowLeft,
+  Download,
+  FileText,
   MessageCircle,
   Paperclip,
   Plus,
   Search,
   Send,
+  Trash2,
   X,
 } from 'lucide-react';
 
@@ -43,6 +48,33 @@ function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
 }
 
+function startOfDay(timestamp: number) {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function formatConversationTime(timestamp: number) {
+  const today = startOfDay(Date.now());
+  const messageDay = startOfDay(timestamp);
+  if (messageDay === today) return formatTime(timestamp);
+  if (messageDay === today - 24 * 60 * 60 * 1000) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString('en-KE', { day: '2-digit', month: 'short' });
+}
+
+function formatDateDivider(timestamp: number) {
+  const today = startOfDay(Date.now());
+  const messageDay = startOfDay(timestamp);
+  if (messageDay === today) return 'Today';
+  if (messageDay === today - 24 * 60 * 60 * 1000) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString('en-KE', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function avatarFor(user?: User, profile?: Profile) {
   return profile?.avatarUrl || user?.avatarUrl || '';
 }
@@ -52,6 +84,21 @@ function statusLabel(message: Message) {
   return 'Delivered';
 }
 
+function formatFileSize(bytes?: number) {
+  if (!bytes) return 'File';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function MessagesPage({ messages, setMessages, showToast }: MessagesPageProps) {
   const { currentUser, users, profiles } = useAuth();
   const [activeReceiverId, setActiveReceiverId] = useState('');
@@ -59,6 +106,7 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
   const [search, setSearch] = useState('');
   const [recipientSearch, setRecipientSearch] = useState('');
   const [showNewMessage, setShowNewMessage] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
 
   const conversations = useMemo<ConversationSummary[]>(() => {
     if (!currentUser) return [];
@@ -66,6 +114,7 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
 
     messages.forEach(message => {
       if (message.senderId !== currentUser._id && message.receiverId !== currentUser._id) return;
+      if (message.deletedFor?.includes(currentUser._id) || message.archivedFor?.includes(currentUser._id)) return;
       const receiverId = message.senderId === currentUser._id ? message.receiverId : message.senderId;
       const otherUser = users.find(user => user._id === receiverId);
       const existing = convMap.get(message.conversationId);
@@ -76,7 +125,7 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
           id: message.conversationId,
           receiverId,
           otherUser: otherUser?.name || receiverId,
-          lastMsg: message.content.slice(0, 80),
+          lastMsg: (message.content || message.attachmentName || 'Attachment').slice(0, 80),
           lastTime: message.createdAt,
           unread: unreadIncrement,
         });
@@ -85,7 +134,7 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
 
       existing.unread += unreadIncrement;
       if (message.createdAt > existing.lastTime) {
-        existing.lastMsg = message.content.slice(0, 80);
+        existing.lastMsg = (message.content || message.attachmentName || 'Attachment').slice(0, 80);
         existing.lastTime = message.createdAt;
       }
     });
@@ -165,13 +214,28 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
   const activeProfile = profiles.find(profile => profile.userId === activeReceiverId);
   const activeConversationId = activeReceiverId ? conversationIdFor(currentUser._id, activeReceiverId) : '';
   const threadMessages = messages
-    .filter(message => message.conversationId === activeConversationId)
+    .filter(message => message.conversationId === activeConversationId && !message.deletedFor?.includes(currentUser._id))
     .sort((a, b) => a.createdAt - b.createdAt);
   const activeAvatar = avatarFor(activeReceiver, activeProfile);
   const latestOutgoingId = [...threadMessages].reverse().find(message => message.senderId === currentUser._id)?._id;
+  const groupedThreadMessages = threadMessages.reduce<Array<{ day: number; label: string; messages: Message[] }>>((groups, message) => {
+    const day = startOfDay(message.createdAt);
+    const existing = groups.find(group => group.day === day);
+    if (existing) {
+      existing.messages.push(message);
+      return groups;
+    }
+    return [...groups, { day, label: formatDateDivider(message.createdAt), messages: [message] }];
+  }, []);
 
   const startConversation = (receiverId: string) => {
+    const nextConversationId = conversationIdFor(currentUser._id, receiverId);
+    setMessages(prev => prev.map(message => message.conversationId === nextConversationId && message.archivedFor?.includes(currentUser._id)
+      ? { ...message, archivedFor: message.archivedFor.filter(userId => userId !== currentUser._id) }
+      : message
+    ));
     setActiveReceiverId(receiverId);
+    setMobileThreadOpen(true);
     setNewText('');
     setRecipientSearch('');
     setShowNewMessage(false);
@@ -201,10 +265,66 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
     showToast('Message sent.');
   };
 
+  const sendAttachment = async (file?: File) => {
+    if (!file) return;
+    if (!activeReceiverId) {
+      showToast('Select someone to message first.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Please upload a file smaller than 5 MB.');
+      return;
+    }
+
+    try {
+      const attachmentUrl = await fileToDataUrl(file);
+      const newMsg: Message = {
+        _id: generateId('msg'),
+        senderId: currentUser._id,
+        receiverId: activeReceiverId,
+        content: '',
+        attachmentName: file.name,
+        attachmentType: file.type || 'application/octet-stream',
+        attachmentSize: file.size,
+        attachmentUrl,
+        read: false,
+        status: 'delivered',
+        conversationId: activeConversationId,
+        createdAt: Date.now(),
+      };
+      setMessages(prev => [...prev, newMsg]);
+      showToast('File sent.');
+    } catch {
+      showToast('File upload failed. Try another file.');
+    }
+  };
+
+  const archiveConversation = () => {
+    if (!activeConversationId) return;
+    setMessages(prev => prev.map(message => message.conversationId === activeConversationId
+      ? { ...message, archivedFor: Array.from(new Set([...(message.archivedFor || []), currentUser._id])) }
+      : message
+    ));
+    setActiveReceiverId('');
+    setMobileThreadOpen(false);
+    showToast('Conversation archived.');
+  };
+
+  const deleteConversation = () => {
+    if (!activeConversationId) return;
+    setMessages(prev => prev.map(message => message.conversationId === activeConversationId
+      ? { ...message, deletedFor: Array.from(new Set([...(message.deletedFor || []), currentUser._id])) }
+      : message
+    ));
+    setActiveReceiverId('');
+    setMobileThreadOpen(false);
+    showToast('Conversation deleted from your inbox.');
+  };
+
   return (
-    <div className="mx-auto max-w-7xl px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
-      <div className="relative grid h-[calc(100vh-96px)] min-h-[520px] overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-2xl shadow-slate-200/80 lg:grid-cols-[360px_1fr]">
-        <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-[#f5f5f7] lg:border-b-0 lg:border-r">
+    <div className="mx-auto max-w-7xl px-0 py-0 sm:px-6 sm:py-4 lg:px-8">
+      <div className="relative grid h-[calc(100vh-80px)] min-h-[520px] overflow-hidden bg-white shadow-2xl shadow-slate-200/80 sm:rounded-[34px] sm:border sm:border-slate-200 lg:h-[calc(100vh-96px)] lg:grid-cols-[360px_1fr]">
+        <aside className={`${mobileThreadOpen ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col bg-[#f5f5f7] lg:border-r`}>
           <div className="px-5 pb-3 pt-5">
             <div className="flex items-center justify-between gap-4">
               <h1 className="text-3xl font-black tracking-tight text-slate-950">Messages</h1>
@@ -284,7 +404,7 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                         <span className="truncate text-[15px] font-black text-slate-950">{user?.name || conversation.otherUser}</span>
                         <VerifiedEmployerBadge user={user} />
                       </span>
-                      <span className="shrink-0 text-[11px] font-bold text-slate-400">{formatTime(conversation.lastTime)}</span>
+                      <span className="shrink-0 text-[11px] font-bold text-slate-400">{formatConversationTime(conversation.lastTime)}</span>
                     </span>
                     <span className="mt-0.5 flex min-w-0 items-center justify-between gap-3">
                       <span className="truncate text-sm text-slate-500">{conversation.lastMsg}</span>
@@ -301,11 +421,20 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
           </div>
         </aside>
 
-        <main className="flex min-h-0 flex-col bg-white">
+        <main className={`${mobileThreadOpen ? 'flex' : 'hidden lg:flex'} min-h-0 flex-col bg-white`}>
           {activeReceiver ? (
             <>
               <header className="flex h-[76px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-5 backdrop-blur">
                 <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileThreadOpen(false)}
+                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-[#007aff] transition hover:bg-blue-50 active:scale-95 lg:hidden"
+                    aria-label="Back to conversations"
+                    title="Back to conversations"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
                   {activeAvatar ? (
                     <img src={activeAvatar} alt={activeReceiver.name} className="h-11 w-11 rounded-full object-cover" />
                   ) : (
@@ -319,6 +448,26 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                       <VerifiedEmployerBadge user={activeReceiver} />
                     </p>
                   </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={archiveConversation}
+                    className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-blue-50 hover:text-[#007aff] active:scale-95"
+                    aria-label="Archive conversation"
+                    title="Archive conversation"
+                  >
+                    <Archive className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteConversation}
+                    className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-red-50 hover:text-red-600 active:scale-95"
+                    aria-label="Delete conversation"
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </header>
 
@@ -340,48 +489,76 @@ export default function MessagesPage({ messages, setMessages, showToast }: Messa
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <span className="rounded-full bg-slate-200/70 px-3 py-1 text-[11px] font-bold text-slate-500">Today</span>
-                    </div>
-
-                    {threadMessages.map(message => {
-                      const isMe = message.senderId === currentUser._id;
-                      return (
-                        <div key={message._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`flex max-w-[min(78%,620px)] flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                            <div className={`rounded-[22px] px-4 py-2.5 text-[15px] shadow-sm ${
-                              isMe
-                                ? 'rounded-br-md bg-[#007aff] text-white'
-                                : 'rounded-bl-md bg-[#e9e9eb] text-slate-950'
-                            }`}>
-                              <p className="leading-6">{message.content}</p>
-                            </div>
-                            {isMe && message._id === latestOutgoingId ? (
-                              <p className="mt-1 pr-1 text-right text-[11px] font-semibold text-slate-400">
-                                {statusLabel(message)}
-                              </p>
-                            ) : !isMe ? (
-                              <p className="mt-1 pl-1 text-[11px] font-medium text-slate-400">{formatTime(message.createdAt)}</p>
-                            ) : null}
-                          </div>
+                  <div className="space-y-5">
+                    {groupedThreadMessages.map(group => (
+                      <div key={group.day} className="space-y-4">
+                        <div className="text-center">
+                          <span className="rounded-full bg-slate-200/70 px-3 py-1 text-[11px] font-bold text-slate-500">{group.label}</span>
                         </div>
-                      );
-                    })}
+
+                        {group.messages.map(message => {
+                          const isMe = message.senderId === currentUser._id;
+                          return (
+                            <div key={message._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`flex max-w-[min(78%,620px)] flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                <div className={`rounded-[22px] px-4 py-2.5 text-[15px] shadow-sm ${
+                                  isMe
+                                    ? 'rounded-br-md bg-[#007aff] text-white'
+                                    : 'rounded-bl-md bg-[#e9e9eb] text-slate-950'
+                                }`}>
+                                  {message.content && <p className="leading-6">{message.content}</p>}
+                                  {message.attachmentUrl && (
+                                    <a
+                                      href={message.attachmentUrl}
+                                      download={message.attachmentName || 'fundilink-attachment'}
+                                      className={`mt-1 flex min-w-[220px] max-w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.99] ${
+                                        isMe ? 'bg-white/15 text-white hover:bg-white/20' : 'bg-white text-slate-950 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${isMe ? 'bg-white/20' : 'bg-blue-50 text-[#007aff]'}`}>
+                                        <FileText className="h-5 w-5" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-black">{message.attachmentName || 'Attachment'}</span>
+                                        <span className={`block text-xs font-semibold ${isMe ? 'text-white/75' : 'text-slate-500'}`}>{formatFileSize(message.attachmentSize)}</span>
+                                      </span>
+                                      <Download className="h-4 w-4 shrink-0" />
+                                    </a>
+                                  )}
+                                </div>
+                                {isMe && message._id === latestOutgoingId ? (
+                                  <p className="mt-1 pr-1 text-right text-[11px] font-semibold text-slate-400">
+                                    {statusLabel(message)}
+                                  </p>
+                                ) : (
+                                  <p className={`mt-1 text-[11px] font-medium text-slate-400 ${isMe ? 'pr-1 text-right' : 'pl-1'}`}>
+                                    {formatTime(message.createdAt)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
               <form onSubmit={handleSend} className="border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f5f5f7] text-[#007aff] transition hover:scale-105 active:scale-95"
-                    aria-label="Attach file"
-                    onClick={() => showToast('Attachment uploads can be connected to CVs, photos, and job files.')}
-                  >
+                  <label className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f5f5f7] text-[#007aff] transition hover:scale-105 active:scale-95" aria-label="Attach file" title="Attach file">
                     <Paperclip className="h-4 w-4" />
-                  </button>
+                    <input
+                      type="file"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        void sendAttachment(file);
+                      }}
+                    />
+                  </label>
                   <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
                     <input
                       type="text"

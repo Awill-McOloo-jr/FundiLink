@@ -38,7 +38,12 @@ export function getReadinessScore(profile?: Profile, user?: User) {
 
 export function getUnreadMessageCount(currentUser: User | null | undefined, messages: Message[]) {
   if (!currentUser) return 0;
-  return messages.filter(message => message.receiverId === currentUser._id && !message.read).length;
+  return messages.filter(message =>
+    message.receiverId === currentUser._id
+    && !message.read
+    && !message.deletedFor?.includes(currentUser._id)
+    && !message.archivedFor?.includes(currentUser._id)
+  ).length;
 }
 
 export function getNotificationSignals(options: {

@@ -1,6 +1,9 @@
 import cors from 'cors';
 import express from 'express';
 import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   SEED_APPLICATIONS,
   SEED_JOBS,
@@ -25,6 +28,12 @@ import {
   type User,
 } from '../src/db/schema';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+const distDir = path.join(rootDir, 'dist');
+const databasePath = process.env.DATABASE_PATH || process.env.SQLITE_PATH || path.join(rootDir, 'server', 'fundilink.sqlite');
+
 type BootstrapState = {
   users: User[];
   profiles: Profile[];
@@ -37,7 +46,8 @@ type BootstrapState = {
   profileViewEvents: ProfileViewEvent[];
 };
 
-const db = new Database('server/fundilink.sqlite');
+mkdirSync(path.dirname(databasePath), { recursive: true });
+const db = new Database(databasePath);
 db.pragma('journal_mode = WAL');
 
 const app = express();
@@ -147,7 +157,7 @@ seedIfEmpty();
 normalizeExistingState();
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, database: 'sqlite', file: 'server/fundilink.sqlite' });
+  res.json({ ok: true, database: 'sqlite', file: databasePath });
 });
 
 app.get('/api/bootstrap', (_req, res) => {
@@ -249,6 +259,11 @@ app.post('/api/auth/verify', (req, res) => {
   res.json({ success: true, message: 'Authentication successful!', currentUser, users, profiles });
 });
 
+app.use(express.static(distDir));
+app.get(/^(?!\/api).*/, (_req, res) => {
+  res.sendFile(path.join(distDir, 'index.html'));
+});
+
 app.listen(port, () => {
-  console.log(`Fundilink API running at http://127.0.0.1:${port}`);
+  console.log(`Fundilink app running at http://127.0.0.1:${port}`);
 });

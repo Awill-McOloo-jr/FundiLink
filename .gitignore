@@ -4,3 +4,4 @@ server/*.sqlite
 server/*.sqlite-*
 .env
 .env.local
+*.log

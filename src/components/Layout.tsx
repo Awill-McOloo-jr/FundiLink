@@ -11,7 +11,6 @@ import {
   MessagesSquare,
   SearchCheck,
   ShieldCheck,
-  Smartphone,
   UserCircle2,
   UserRound,
   X,
@@ -309,15 +308,19 @@ export default function Layout({
       )}
 
       {toast && (
-        <div className="animate-toast-in fixed right-4 top-4 z-50 max-w-md overflow-hidden rounded-2xl border border-blue-400/30 bg-[#005fec] px-4 py-3 text-white shadow-2xl">
+        <div className="animate-toast-in fixed bottom-5 right-5 z-50 max-w-md rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-2xl shadow-slate-950/20">
           <div className="flex items-start gap-3">
-            <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-            <p className="text-xs font-semibold leading-relaxed">{toast}</p>
-            <button onClick={onDismissToast} className="ml-auto rounded-md px-1 text-white/80 hover:bg-white/10 hover:text-white">
+            <span className="relative mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+              <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden="true">
+                <circle cx="14" cy="14" r="11.5" fill="none" stroke="currentColor" strokeWidth="2.4" className="animate-toast-success-ring" />
+                <path d="M8.5 14.5 12.3 18.2 20 10.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" className="animate-toast-success-tick" />
+              </svg>
+            </span>
+            <p className="text-xs font-bold leading-relaxed">{toast}</p>
+            <button onClick={onDismissToast} className="ml-auto rounded-md px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="absolute bottom-0 left-0 h-1 animate-toast-bar bg-white/50" />
         </div>
       )}
 

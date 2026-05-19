@@ -129,9 +129,15 @@ export interface Message {
   senderId: string;        // FK → users._id
   receiverId: string;      // FK → users._id
   content: string;
+  attachmentName?: string;
+  attachmentType?: string;
+  attachmentSize?: number;
+  attachmentUrl?: string;
   read: boolean;
   status: MessageStatus;
   conversationId: string;  // compound: sorted "userIdA_userIdB"
+  archivedFor?: string[];  // user IDs that archived this conversation locally
+  deletedFor?: string[];   // user IDs that deleted this message locally
   createdAt: number;
 }
 
