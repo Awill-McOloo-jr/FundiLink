@@ -32,7 +32,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
-const databasePath = process.env.DATABASE_PATH || process.env.SQLITE_PATH || path.join(rootDir, 'server', 'fundilink.sqlite');
+const preferredDatabasePath = process.env.DATABASE_PATH || process.env.SQLITE_PATH || path.join(rootDir, 'server', 'fundilink.sqlite');
+const fallbackDatabasePath = path.join(rootDir, 'server', 'fundilink.sqlite');
 
 type BootstrapState = {
   users: User[];
@@ -46,8 +47,19 @@ type BootstrapState = {
   profileViewEvents: ProfileViewEvent[];
 };
 
-mkdirSync(path.dirname(databasePath), { recursive: true });
-const db = new Database(databasePath);
+function openDatabase(preferredPath: string) {
+  try {
+    mkdirSync(path.dirname(preferredPath), { recursive: true });
+    return { db: new Database(preferredPath), databasePath: preferredPath };
+  } catch (error) {
+    if (preferredPath === fallbackDatabasePath) throw error;
+    console.warn(`Could not open SQLite database at ${preferredPath}. Falling back to ${fallbackDatabasePath}.`);
+    mkdirSync(path.dirname(fallbackDatabasePath), { recursive: true });
+    return { db: new Database(fallbackDatabasePath), databasePath: fallbackDatabasePath };
+  }
+}
+
+const { db, databasePath } = openDatabase(preferredDatabasePath);
 db.pragma('journal_mode = WAL');
 
 const app = express();
