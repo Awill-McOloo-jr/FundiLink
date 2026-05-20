@@ -12,7 +12,9 @@ import {
   SEED_PROFILES,
   SEED_REVIEWS,
   SEED_USERS,
+  defaultAccountSettings,
   defaultAvatarForUser,
+  defaultEmployerProfileForUser,
   generateId,
   generateOTP,
   getJobCategory,
@@ -123,6 +125,8 @@ function normalizeExistingState() {
   const users = state.users.map(user => ({
     ...user,
     avatarUrl: user.avatarUrl || SEED_USERS.find(seedUser => seedUser._id === user._id)?.avatarUrl || defaultAvatarForUser(user.role, user.name),
+    employerProfile: user.role === 'employer' ? user.employerProfile || defaultEmployerProfileForUser(user) : user.employerProfile,
+    accountSettings: user.accountSettings || defaultAccountSettings(),
     verified: user.verified ?? SEED_USERS.find(seedUser => seedUser._id === user._id)?.verified ?? false,
     verificationStatus: user.verificationStatus || SEED_USERS.find(seedUser => seedUser._id === user._id)?.verificationStatus || (user.verified ? 'verified' : 'unverified'),
     verificationDocuments: user.verificationDocuments || SEED_USERS.find(seedUser => seedUser._id === user._id)?.verificationDocuments || [],

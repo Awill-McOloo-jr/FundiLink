@@ -29,6 +29,66 @@ export const JOB_CATEGORIES = [
 
 export type JobCategory = Exclude<(typeof JOB_CATEGORIES)[number], 'All Categories'>;
 
+export const EMPLOYER_INDUSTRIES = [
+  'Construction',
+  'Real Estate',
+  'Property Management',
+  'Contracting',
+  'Facilities Management',
+  'Homeowner',
+  'Other',
+] as const;
+
+export const COMPANY_SIZES = ['1-10', '11-50', '51-200', '200+'] as const;
+
+export type EmployerIndustry = (typeof EMPLOYER_INDUSTRIES)[number];
+export type CompanySize = (typeof COMPANY_SIZES)[number];
+
+export interface EmployerProfileDetails {
+  companyName: string;
+  industry: EmployerIndustry;
+  companySize: CompanySize;
+  websiteUrl: string;
+  companyDescription: string;
+  county: string;
+}
+
+export interface AccountSettings {
+  notifications: {
+    email: {
+      newApplication: boolean;
+      candidateMessage: boolean;
+      applicationStatus: boolean;
+      weeklyDigest: boolean;
+      platformNews: boolean;
+      promotions: boolean;
+    };
+    inApp: {
+      newMatch: boolean;
+      messageReceived: boolean;
+      jobPosted: boolean;
+      systemAnnouncements: boolean;
+    };
+    sms: {
+      newApplicationAlert: boolean;
+      interviewReminder: boolean;
+      paymentConfirmation: boolean;
+    };
+  };
+  privacy: {
+    profileVisibility: 'public' | 'verified' | 'private';
+    showPhone: boolean;
+    showEmail: boolean;
+    allowDirectMessages: boolean;
+    useDataForMatching: boolean;
+    shareAnonymisedUsage: boolean;
+  };
+  billing: {
+    plan: 'Free' | 'Pro' | 'Enterprise';
+    paymentMethod: string;
+  };
+}
+
 // ── TABLE: users ────────────────────────────────────────────────────────────
 // Indexes: byEmail (unique), byRole, byPhone
 export interface User {
@@ -38,6 +98,8 @@ export interface User {
   name: string;
   phone: string;           // +254 prefixed
   avatarUrl?: string;
+  employerProfile?: EmployerProfileDetails;
+  accountSettings?: AccountSettings;
   verified?: boolean;
   verificationStatus?: 'unverified' | 'pending' | 'verified';
   verificationDocuments?: string[];
@@ -194,6 +256,57 @@ export function defaultAvatarForUser(role: UserRole, name = '') {
   return USER_AVATAR_POOL[(nameScore + offset) % USER_AVATAR_POOL.length];
 }
 
+export function defaultEmployerProfileForUser(user: Pick<User, 'name' | 'role'>): EmployerProfileDetails {
+  return {
+    companyName: user.role === 'employer' ? `${user.name.split(' ')[0] || user.name} Works` : user.name,
+    industry: 'Construction',
+    companySize: '1-10',
+    websiteUrl: '',
+    companyDescription: user.role === 'employer'
+      ? 'Hiring reliable Kenyan fundis for construction, repair, and maintenance work.'
+      : '',
+    county: 'Nairobi',
+  };
+}
+
+export function defaultAccountSettings(): AccountSettings {
+  return {
+    notifications: {
+      email: {
+        newApplication: true,
+        candidateMessage: true,
+        applicationStatus: true,
+        weeklyDigest: false,
+        platformNews: false,
+        promotions: false,
+      },
+      inApp: {
+        newMatch: true,
+        messageReceived: true,
+        jobPosted: true,
+        systemAnnouncements: false,
+      },
+      sms: {
+        newApplicationAlert: false,
+        interviewReminder: false,
+        paymentConfirmation: false,
+      },
+    },
+    privacy: {
+      profileVisibility: 'verified',
+      showPhone: true,
+      showEmail: false,
+      allowDirectMessages: true,
+      useDataForMatching: true,
+      shareAnonymisedUsage: false,
+    },
+    billing: {
+      plan: 'Free',
+      paymentMethod: '',
+    },
+  };
+}
+
 export const SEED_USERS: User[] = [
   { _id: 'u_fundi_1', email: 'kamau.mason@gmail.com', role: 'fundi', name: 'John Kamau', phone: '+254712345678', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 90*day, updatedAt: now - 2*day },
   { _id: 'u_fundi_2', email: 'mwangi.plumber@yahoo.com', role: 'fundi', name: 'Peter Mwangi', phone: '+254722111222', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=face&q=80', passwordHash: '$2b$10$simulated', isSuspended: false, verified: false, verificationStatus: 'unverified', verificationDocuments: [], createdAt: now - 60*day, updatedAt: now - 5*day },
@@ -253,7 +366,16 @@ export const SEED_PAYMENTS: Payment[] = [
 // DATABASE SERVICE — Convex-like reactive query layer
 // ============================================================================
 
-export const COUNTIES = ['All Counties', 'Nairobi', 'Mombasa', 'Kiambu', 'Kisumu', 'Nakuru', 'Eldoret', 'Machakos', 'Kajiado'];
+export const KENYA_COUNTIES = [
+  'Baringo', 'Bomet', 'Bungoma', 'Busia', 'Elgeyo-Marakwet', 'Embu', 'Garissa', 'Homa Bay',
+  'Isiolo', 'Kajiado', 'Kakamega', 'Kericho', 'Kiambu', 'Kilifi', 'Kirinyaga', 'Kisii',
+  'Kisumu', 'Kitui', 'Kwale', 'Laikipia', 'Lamu', 'Machakos', 'Makueni', 'Mandera',
+  'Marsabit', 'Meru', 'Migori', 'Mombasa', "Murang'a", 'Nairobi', 'Nakuru', 'Nandi',
+  'Narok', 'Nyamira', 'Nyandarua', 'Nyeri', 'Samburu', 'Siaya', 'Taita-Taveta', 'Tana River',
+  'Tharaka-Nithi', 'Trans Nzoia', 'Turkana', 'Uasin Gishu', 'Vihiga', 'Wajir', 'West Pokot',
+] as const;
+
+export const COUNTIES = ['All Counties', ...KENYA_COUNTIES, 'Eldoret'];
 
 export const SKILL_OPTIONS = ['All Skills', 'Masonry', 'Plumbing', 'Electrical Wiring', 'Carpentry', 'Tile Fitting', 'Concrete Mixing', 'Solar Installation', 'Cabinet Making', 'Drainage', 'Roofing', 'Painting', 'Gypsum Ceiling', 'Fault Finding', 'Pipe Fitting', 'Borehole Drilling', 'CCTV Installation', 'Welding', 'Metal Fabrication', 'HVAC Service', 'Cabro Laying'];
 

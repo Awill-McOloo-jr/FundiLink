@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { formatKSh, getJobCategory, type Job, type Review } from '../db/schema';
+import { defaultEmployerProfileForUser, formatKSh, getJobCategory, type Job, type Review } from '../db/schema';
 import VerifiedEmployerBadge from '../components/VerifiedEmployerBadge';
 import FundiProfilePage from './FundiProfilePage';
 import { AlertTriangle, BriefcaseBusiness, Building2, CalendarClock, MessageSquare, ShieldCheck } from 'lucide-react';
@@ -58,6 +58,7 @@ export default function PublicUserProfilePage({
 
   const employerJobs = jobs.filter(job => job.employerId === user._id);
   const activeJobs = employerJobs.filter(job => job.status === 'active');
+  const employerProfile = user.employerProfile || defaultEmployerProfileForUser(user);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -77,8 +78,9 @@ export default function PublicUserProfilePage({
                   <h1 className="text-2xl font-black tracking-tight">{user.name}</h1>
                   <VerifiedEmployerBadge user={user} className="h-5 w-5" />
                 </div>
+                <p className="mt-1 text-sm font-black text-orange-200">{employerProfile.companyName}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  {user.verified ? 'Verified employer account on Fundilink.' : 'Employer account awaiting full verification.'}
+                  {employerProfile.companyDescription || (user.verified ? 'Verified employer account on Fundilink.' : 'Employer account awaiting full verification.')}
                 </p>
               </div>
             </div>
@@ -88,7 +90,7 @@ export default function PublicUserProfilePage({
                 { label: 'Active jobs', value: activeJobs.length },
                 { label: 'Total posts', value: employerJobs.length },
                 { label: 'Verification', value: user.verified ? 'Verified' : user.verificationStatus || 'Pending' },
-                { label: 'Evidence files', value: user.verificationDocuments?.length || 0 },
+                { label: 'County', value: employerProfile.county },
               ].map(metric => (
                 <div key={metric.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
                   <p className="text-lg font-black capitalize">{metric.value}</p>
@@ -107,6 +109,11 @@ export default function PublicUserProfilePage({
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs font-black text-slate-900">Contact</p>
                 <p className="mt-1 text-sm text-slate-600">{user.phone}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-xs font-black text-slate-900">Company details</p>
+                <p className="mt-1 text-sm text-slate-600">{employerProfile.industry} / {employerProfile.companySize} staff / {employerProfile.county}</p>
+                {employerProfile.websiteUrl && <p className="mt-1 text-xs font-bold text-[#005fec]">{employerProfile.websiteUrl}</p>}
               </div>
               <div className="rounded-xl bg-blue-50 p-4">
                 <p className="text-xs font-black text-blue-950">Verification system</p>

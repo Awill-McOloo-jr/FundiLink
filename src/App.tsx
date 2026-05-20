@@ -5,6 +5,7 @@ import {
   type Job, type Application, type Message, type Review, type Payment, type ProfileViewEvent
 } from './db/schema';
 import Layout from './components/Layout';
+import AppLoadingScreen from './components/AppLoadingScreen';
 import HomePage from './pages/HomePage';
 import JobsPage from './pages/JobsPage';
 import FundiProfilePage from './pages/FundiProfilePage';
@@ -14,13 +15,15 @@ import { AdminDashboard } from './pages/Dashboards';
 import FundiDashboard from './pages/FundiDashboard';
 import FundiProfileManager from './pages/FundiProfileManager';
 import EmployerDashboard from './pages/EmployerDashboard';
+import EmployerProfilePage from './pages/EmployerProfilePage';
+import AccountSettingsPage from './pages/AccountSettingsPage';
 import MessagesPage from './pages/MessagesPage';
 import FundiKnowledgePage from './pages/FundiKnowledgePage';
 import NotificationsPage from './pages/NotificationsPage';
 import PublicUserProfilePage from './pages/PublicUserProfilePage';
 import { getNotificationSignals, getUnreadMessageCount } from './utils/notificationSignals';
 
-type Page = 'home' | 'fundis' | 'jobs' | 'job-detail' | 'fundi-profile' | 'user-profile' | 'profile' | 'auth' | 'dashboard-fundi' | 'dashboard-employer' | 'admin' | 'messages' | 'knowledge' | 'notifications';
+type Page = 'home' | 'fundis' | 'jobs' | 'job-detail' | 'fundi-profile' | 'user-profile' | 'profile' | 'settings' | 'auth' | 'dashboard-fundi' | 'dashboard-employer' | 'employer-jobs' | 'employer-candidates' | 'employer-applications' | 'employer-analytics' | 'admin' | 'messages' | 'knowledge' | 'notifications';
 
 const APP_STORAGE_KEY = 'fundilink.app-state.v1';
 
@@ -34,6 +37,7 @@ type StoredAppState = {
   currentPage?: Page;
   selectedJobId?: string;
   selectedFundiId?: string;
+  selectedEmployerJobId?: string;
   filterCounty?: string;
   filterSkill?: string;
   filterQuery?: string;
@@ -57,9 +61,14 @@ const pagePaths: Record<Page, string> = {
   'fundi-profile': '/fundis/public-profile',
   'user-profile': '/users/profile',
   profile: '/profile',
+  settings: '/settings',
   auth: '/auth',
   'dashboard-fundi': '/dashboard/fundi',
   'dashboard-employer': '/dashboard/employer',
+  'employer-jobs': '/dashboard/employer/jobs',
+  'employer-candidates': '/dashboard/employer/candidates',
+  'employer-applications': '/dashboard/employer/applications',
+  'employer-analytics': '/dashboard/employer/analytics',
   admin: '/admin',
   messages: '/messages',
   knowledge: '/knowledge',
@@ -73,8 +82,13 @@ function pageFromPath(pathname: string): Page | null {
   if (pathname.startsWith('/fundis/public-profile')) return 'fundi-profile';
   if (pathname.startsWith('/fundis')) return 'fundis';
   if (pathname.startsWith('/users/profile')) return 'user-profile';
+  if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/profile')) return 'profile';
   if (pathname.startsWith('/auth')) return 'auth';
+  if (pathname.startsWith('/dashboard/employer/jobs')) return 'employer-jobs';
+  if (pathname.startsWith('/dashboard/employer/candidates')) return 'employer-candidates';
+  if (pathname.startsWith('/dashboard/employer/applications')) return 'employer-applications';
+  if (pathname.startsWith('/dashboard/employer/analytics')) return 'employer-analytics';
   if (pathname.startsWith('/dashboard/employer')) return 'dashboard-employer';
   if (pathname.startsWith('/dashboard/fundi')) return 'dashboard-fundi';
   if (pathname.startsWith('/admin')) return 'admin';
@@ -84,8 +98,29 @@ function pageFromPath(pathname: string): Page | null {
   return null;
 }
 
+function employerJobIdFromLocation() {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('job') || '';
+}
+
+function isPastApplicationDeadline(deadline: string) {
+  const deadlineTime = new Date(`${deadline}T23:59:59`).getTime();
+  return Number.isFinite(deadlineTime) && deadlineTime < Date.now();
+}
+
+function archiveExpiredJobs(jobs: Job[]) {
+  let changed = false;
+  const updatedAt = Date.now();
+  const nextJobs = jobs.map(job => {
+    if (job.status !== 'active' || !isPastApplicationDeadline(job.deadline)) return job;
+    changed = true;
+    return { ...job, status: 'cancelled' as const, updatedAt };
+  });
+  return changed ? nextJobs : jobs;
+}
+
 function AppContent() {
-  const { currentUser, updateProfile, suspendUser, profiles } = useAuth();
+  const { currentUser, updateProfile, suspendUser, profiles, isLoading: authLoading } = useAuth();
   const storedAppState = typeof window !== 'undefined' ? readStoredAppState() : {};
 
   // Database state (simulating Convex reactive tables)
@@ -103,6 +138,7 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<Page>(() => pageFromPath(window.location.pathname) || storedAppState.currentPage || 'home');
   const [selectedJobId, setSelectedJobId] = useState(storedAppState.selectedJobId || 'job_1');
   const [selectedFundiId, setSelectedFundiId] = useState(storedAppState.selectedFundiId || 'u_fundi_1');
+  const [selectedEmployerJobId, setSelectedEmployerJobId] = useState(employerJobIdFromLocation() || storedAppState.selectedEmployerJobId || '');
 
   // Filter state
   const [filterCounty, setFilterCounty] = useState(storedAppState.filterCounty || 'All Counties');
@@ -132,9 +168,12 @@ function AppContent() {
 
   const navigate = useCallback((page: string) => {
     const nextPage = page as Page;
+    if (nextPage === 'employer-applications') {
+      setSelectedEmployerJobId('');
+    }
     setCurrentPage(nextPage);
     const nextPath = pagePaths[nextPage] || '/';
-    if (window.location.pathname !== nextPath) {
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) {
       window.history.pushState({ page: nextPage }, '', nextPath);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -162,6 +201,17 @@ function AppContent() {
     setSelectedFundiId(userId);
     navigate('user-profile');
   }, [navigate]);
+
+  const openEmployerJobApplications = useCallback((jobId: string) => {
+    setSelectedEmployerJobId(jobId);
+    const nextPage: Page = 'employer-applications';
+    const nextPath = `${pagePaths[nextPage]}?job=${encodeURIComponent(jobId)}`;
+    setCurrentPage(nextPage);
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) {
+      window.history.pushState({ page: nextPage, jobId }, '', nextPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const recordProfileView = useCallback((fundiId: string) => {
     const viewKey = `${currentUser?._id || 'guest'}:${fundiId}`;
@@ -224,6 +274,14 @@ function AppContent() {
 
   useEffect(() => {
     if (!serverLoaded) return;
+    const archiveNow = () => setJobs(prev => archiveExpiredJobs(prev));
+    archiveNow();
+    const intervalId = window.setInterval(archiveNow, 60000);
+    return () => window.clearInterval(intervalId);
+  }, [serverLoaded]);
+
+  useEffect(() => {
+    if (!serverLoaded) return;
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(APP_STORAGE_KEY, JSON.stringify({
       jobs,
@@ -235,6 +293,7 @@ function AppContent() {
       currentPage,
       selectedJobId,
       selectedFundiId,
+      selectedEmployerJobId,
       filterCounty,
       filterSkill,
       filterQuery,
@@ -263,6 +322,7 @@ function AppContent() {
     profileViews,
     profileViewEvents,
     reviews,
+    selectedEmployerJobId,
     selectedFundiId,
     selectedJobId,
     serverLoaded,
@@ -271,7 +331,11 @@ function AppContent() {
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPage(pageFromPath(window.location.pathname) || 'home');
+      const nextPage = pageFromPath(window.location.pathname) || 'home';
+      setCurrentPage(nextPage);
+      if (nextPage === 'employer-applications') {
+        setSelectedEmployerJobId(employerJobIdFromLocation());
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -312,7 +376,11 @@ function AppContent() {
               setApplications={setApplications}
               onNavigate={navigate}
               onSelectFundi={setSelectedFundiId}
+              onOpenJobApplications={openEmployerJobApplications}
+              selectedEmployerJobId={selectedEmployerJobId}
+              onSelectEmployerJob={setSelectedEmployerJobId}
               showToast={showToast}
+              view="dashboard"
             />
           );
         }
@@ -392,6 +460,15 @@ function AppContent() {
           />
         );
       case 'profile':
+        if (currentUser?.role === 'employer') {
+          return (
+            <EmployerProfilePage
+              jobs={jobs}
+              applications={applications}
+              showToast={showToast}
+            />
+          );
+        }
         return (
           <FundiProfileManager
             jobs={jobs}
@@ -402,6 +479,8 @@ function AppContent() {
             updateProfile={updateProfile}
           />
         );
+      case 'settings':
+        return <AccountSettingsPage showToast={showToast} />;
       case 'auth':
         return <AuthPage onNavigate={navigate} showToast={showToast} />;
       case 'dashboard-fundi':
@@ -426,7 +505,75 @@ function AppContent() {
             setApplications={setApplications}
             onNavigate={navigate}
             onSelectFundi={setSelectedFundiId}
+            onOpenJobApplications={openEmployerJobApplications}
+            selectedEmployerJobId={selectedEmployerJobId}
+            onSelectEmployerJob={setSelectedEmployerJobId}
             showToast={showToast}
+            view="dashboard"
+          />
+        );
+      case 'employer-jobs':
+        return (
+          <EmployerDashboard
+            jobs={jobs}
+            setJobs={setJobs}
+            applications={applications}
+            setApplications={setApplications}
+            onNavigate={navigate}
+            onSelectFundi={setSelectedFundiId}
+            onOpenJobApplications={openEmployerJobApplications}
+            selectedEmployerJobId={selectedEmployerJobId}
+            onSelectEmployerJob={setSelectedEmployerJobId}
+            showToast={showToast}
+            view="jobs"
+          />
+        );
+      case 'employer-candidates':
+        return (
+          <EmployerDashboard
+            jobs={jobs}
+            setJobs={setJobs}
+            applications={applications}
+            setApplications={setApplications}
+            onNavigate={navigate}
+            onSelectFundi={setSelectedFundiId}
+            onOpenJobApplications={openEmployerJobApplications}
+            selectedEmployerJobId={selectedEmployerJobId}
+            onSelectEmployerJob={setSelectedEmployerJobId}
+            showToast={showToast}
+            view="candidates"
+          />
+        );
+      case 'employer-applications':
+        return (
+          <EmployerDashboard
+            jobs={jobs}
+            setJobs={setJobs}
+            applications={applications}
+            setApplications={setApplications}
+            onNavigate={navigate}
+            onSelectFundi={setSelectedFundiId}
+            onOpenJobApplications={openEmployerJobApplications}
+            selectedEmployerJobId={selectedEmployerJobId}
+            onSelectEmployerJob={setSelectedEmployerJobId}
+            showToast={showToast}
+            view="applications"
+          />
+        );
+      case 'employer-analytics':
+        return (
+          <EmployerDashboard
+            jobs={jobs}
+            setJobs={setJobs}
+            applications={applications}
+            setApplications={setApplications}
+            onNavigate={navigate}
+            onSelectFundi={setSelectedFundiId}
+            onOpenJobApplications={openEmployerJobApplications}
+            selectedEmployerJobId={selectedEmployerJobId}
+            onSelectEmployerJob={setSelectedEmployerJobId}
+            showToast={showToast}
+            view="analytics"
           />
         );
       case 'admin':
@@ -457,6 +604,10 @@ function AppContent() {
         return <HomePage onNavigate={navigate} onSelectFundi={(id) => setSelectedFundiId(id)} onFilterChange={handleFilterChange} />;
     }
   };
+
+  if (authLoading || !serverLoaded) {
+    return <AppLoadingScreen />;
+  }
 
   return (
     <Layout

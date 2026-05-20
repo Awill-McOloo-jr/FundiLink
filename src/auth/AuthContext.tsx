@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { SEED_PROFILES, SEED_USERS, defaultAvatarForUser, type Profile, type User, type UserRole } from '../db/schema';
+import { SEED_PROFILES, SEED_USERS, defaultAccountSettings, defaultAvatarForUser, defaultEmployerProfileForUser, type Profile, type User, type UserRole } from '../db/schema';
 
 interface AuthResult {
   success: boolean;
@@ -11,6 +11,7 @@ interface AuthState {
   users: User[];
   profiles: Profile[];
   isAuthenticated: boolean;
+  isLoading: boolean;
   authStep: 'idle' | 'enter_details' | 'otp_sent' | 'authenticated';
   pendingUser: Partial<User> | null;
   otpCode: string;
@@ -69,6 +70,8 @@ function migrateUsers(users: User[]) {
   return users.map(user => ({
     ...user,
     avatarUrl: user.avatarUrl || defaultUserAvatars[user._id] || defaultAvatarForUser(user.role, user.name),
+    employerProfile: user.role === 'employer' ? user.employerProfile || defaultEmployerProfileForUser(user) : user.employerProfile,
+    accountSettings: user.accountSettings || defaultAccountSettings(),
     verified: user.verified ?? seedUsersById.get(user._id)?.verified ?? false,
     verificationStatus: user.verificationStatus || seedUsersById.get(user._id)?.verificationStatus || (user.verified ? 'verified' : 'unverified'),
     verificationDocuments: user.verificationDocuments || seedUsersById.get(user._id)?.verificationDocuments || [],
@@ -195,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       users,
       profiles,
       isAuthenticated: !!currentUser,
+      isLoading: !serverLoaded,
       authStep,
       pendingUser,
       otpCode,
